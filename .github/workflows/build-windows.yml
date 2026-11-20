@@ -1,0 +1,113 @@
+# Builds the Jaromes Lite installer for Windows (64-bit) on GitHub's Windows machines.
+# Run it from the Actions tab ("Run workflow"), or push a version tag (git tag v1.0.1 && git push origin v1.0.1)
+# to publish a GitHub release. A release also carries the signed update and latest.json, which every installed
+# Jaromes Lite checks: it offers "Update to …" in its panel and installs it in one click.
+# Bump "version" in showcase/tauri/src-tauri/tauri.conf.json to match the tag first.
+name: Build Windows app
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      TARGET: x86_64-pc-windows-msvc
+    defaults:
+      run:
+        shell: bash
+        working-directory: showcase/tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: showcase/tauri/sidecar/package-lock.json
+
+      - name: Install sidecar dependencies
+        working-directory: showcase/tauri/sidecar
+        run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            showcase/tauri/src-tauri -> target
+            showcase/tauri/src-tauri/voice-win -> target
+            showcase/tauri/src-tauri/hands-win -> target
+
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+
+      # The installer needs NSIS; fetch it through the GitHub API (the bundler's own download links can time out).
+      - name: Prefetch NSIS
+        shell: pwsh
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dir = Join-Path $env:LOCALAPPDATA 'tauri'; $tmp = Join-Path $env:RUNNER_TEMP 'nsis'
+          New-Item -ItemType Directory -Force $dir, $tmp | Out-Null
+          try {
+            gh release download nsis-3.13 -R tauri-apps/binary-releases -p nsis-3.13.zip -D $tmp --clobber
+            if ($LASTEXITCODE) { throw 'NSIS download failed' }
+            gh release download nsis_tauri_utils-v0.5.3 -R tauri-apps/nsis-tauri-utils -p nsis_tauri_utils.dll -D $tmp --clobber
+            if ($LASTEXITCODE) { throw 'nsis_tauri_utils download failed' }
+            if ((Get-FileHash (Join-Path $tmp 'nsis-3.13.zip') -Algorithm SHA1).Hash -ne 'DB14F8AF2EA346B786C6AE19343F61AAF5E09B8E') { throw 'NSIS hash mismatch' }
+            if ((Get-FileHash (Join-Path $tmp 'nsis_tauri_utils.dll') -Algorithm SHA1).Hash -ne '75197FEE3C6A814FE035788D1C34EAD39349B860') { throw 'nsis_tauri_utils hash mismatch' }
+            Remove-Item -Recurse -Force (Join-Path $dir 'NSIS'), (Join-Path $dir 'nsis-3.13') -ErrorAction SilentlyContinue
+            Expand-Archive (Join-Path $tmp 'nsis-3.13.zip') -DestinationPath $dir
+            Rename-Item (Join-Path $dir 'nsis-3.13') 'NSIS'
+            $add = Join-Path $dir 'NSIS/Plugins/x86-unicode/additional'
+            New-Item -ItemType Directory -Force $add | Out-Null
+            Copy-Item (Join-Path $tmp 'nsis_tauri_utils.dll') $add
+          } catch { Write-Host "Couldn't prefetch NSIS ($_); the bundler will download it itself." }
+
+      - name: Build
+        env:
+          TAURI_BUNDLES: nsis
+          # Signs the update (the public half is plugins.updater.pubkey in tauri.conf.json).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: ./build.sh release --target $TARGET --config '{"bundle":{"createUpdaterArtifacts":true}}'
+
+      - name: Rename the installer
+        run: |
+          SETUP=$(ls src-tauri/target/$TARGET/release/bundle/nsis/*-setup.exe | head -1)
+          VER=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          mkdir -p out && cp "$SETUP" "out/Jaromes-Lite_${VER}_windows-x64-setup.exe"
+          cp "$SETUP.sig" "out/Jaromes-Lite_${VER}_windows-x64-setup.exe.sig"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jaromes-Lite-windows
+          path: showcase/tauri/out/*
+
+      - name: Attach to a GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Jaromes Lite $GITHUB_REF_NAME (Windows)" --generate-notes || true
+          gh release upload "$GITHUB_REF_NAME" out/* --clobber
+          # latest.json: the update feed every installed Jaromes Lite for Windows reads.
+          VER=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          F="Jaromes-Lite_${VER}_windows-x64-setup.exe"
+          VER="$VER" F="$F" BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" node -e '
+            const fs = require("fs"), { VER, F, BASE } = process.env;
+            const out = { version: VER, notes: `Jaromes Lite ${VER}`, pub_date: new Date().toISOString(),
+              platforms: { "windows-x86_64": { signature: fs.readFileSync(`out/${F}.sig`, "utf8").trim(), url: `${BASE}/${F}` } } };
+            fs.writeFileSync("latest.json", JSON.stringify(out, null, 2));
+          '
+          gh release upload "$GITHUB_REF_NAME" latest.json --clobber
