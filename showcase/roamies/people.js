@@ -90,6 +90,30 @@
         rows: ['...hhh', '..hhHH', '.hhhhh', '.hssss', 'zsssss', '.sssss', '.hhsss', '..hhhh', '..CCck'],
       },
     },
+    // Jarome: Jaromes Lite's own study buddy (by Vansh Bohra). Spiky hair, headphones over it, round glasses and a
+    // hoodie with drawstrings.
+    jarome: {
+      L: {
+        w: 29, cy: 14, fade: 5, eye: [2, 12], mouth: 18,
+        over: [[11, 9, '44444', true], [14, 9, '44444', true], [12, 8, '4', true], [13, 8, '4', true], [12, 14, '4']],
+        rows: [
+          '...............', '........h....h.', '......h.hh..hhh', '......hhhhhhhhh', '.....kkhhHHhhHH', '....kk.hhhhhhhh',
+          '....k..hhhhhhhh', '...k..hhhhsssss', '...k..hhsssssss', '..kCC.hssssssss', '..kCCCzssssssss', '..kCCCzssssssss',
+          '..kCCCzssssssss', '..kCCCzssssssss', '..kCC.zssssssss', '......sssssssss', '......zssssssss', '.......ssssssss',
+          '.......zsssssss', '........zssssss', '.........zzssss', '...........zsss', '............zss', '............zss',
+          '......ccccccCzz', '....ccccccccwcc', '...cccccccccwcc', '..ccccccccccwcc', '.cccccccccccccc', 'ccccccccccccccc',
+        ],
+      },
+      S: {
+        w: 17, cy: 8, fade: 3, eye: [2, 8], mouth: 11,
+        over: [[7, 4, '333', true], [9, 4, '333', true], [8, 3, '3', true], [8, 8, '3']],
+        rows: ['....h..h.', '...hhhhhh', '..khhHHhh', '.k.hhhhhh', '.k.hhssss', '.kChsssss', 'kCCzsssss', 'kCCzsssss', '.kCzsssss', '...ssssss', '...zsssss', '....zssss', '.....zsss', '......zss', '.......zs', '..ccccwcc', 'cccccwccc'],
+      },
+      X: {
+        w: 11, cy: 4, fade: 1, eye: [1, 3], mouth: 5,
+        rows: ['.h..h.', '..hhhh', 'khhhhh', 'kChsss', 'kCssss', '.zssss', '..zsss', '...zss', '..ccwc'],
+      },
+    },
     // Rita X: long waves swept over her right shoulder, bright cat-eye glasses, a drop earring on the bare side, a
     // beauty mark, a narrow jaw and fuller lips; a blazer over an open blouse.
     rita: {
@@ -248,6 +272,11 @@
       S: { open: ['0', '0'], wide: ['0', '0', '0'], shut: ['.', '0'], happy: ['0'], dizzy: ['0'], sleepy: ['.', '0'] },
       X: { open: ['0', '0'], wide: ['0', '0'], shut: ['.', '0'], happy: ['0'], dizzy: ['0'], sleepy: ['.', '0'] },
     },
+    jarome: {
+      L: { open: ['000', '040'], wide: ['000', '040', '000'], shut: ['...', '000'], happy: ['.0.', '0.0'], dizzy: ['0.0', '.0.', '0.0'], sleepy: ['...', '000'] },
+      S: { open: ['0', '0'], wide: ['0', '0', '0'], shut: ['.', '0'], happy: ['0'], dizzy: ['0'], sleepy: ['.', '0'] },
+      X: { open: ['0', '0'], wide: ['0', '0'], shut: ['.', '0'], happy: ['0'], dizzy: ['0'], sleepy: ['.', '0'] },
+    },
   };
   // Mouths, centred: closed (a small smile), talk1, talk2 (open wider), shout, o, frown, grin, flat.
   const MOUTHS = {
@@ -397,5 +426,5 @@
     },
   });
 
-  R.people = { anime: person('anime'), sarah: person('sarah'), adrian: person('adrian'), rita: person('rita'), ultren: person('ultren'), glayos: person('glayos'), ken: person('ken') };
+  R.people = { anime: person('anime'), sarah: person('sarah'), adrian: person('adrian'), rita: person('rita'), ultren: person('ultren'), glayos: person('glayos'), ken: person('ken'), jarome: person('jarome') };
 })();

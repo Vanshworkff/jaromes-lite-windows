@@ -82,7 +82,7 @@ html, body { height: 100%; background: transparent; }
 .by.quiet { visibility: hidden; }
 .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .who h1 {
-  margin: 0; font: 900 22px/1.1 var(--display); letter-spacing: 0.02em; color: var(--ink);
+  margin: 0; font: 900 19px/1.1 var(--display); letter-spacing: 0; color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* The version and the one update button beside the name: Check for updates, then Update to x (the one accent

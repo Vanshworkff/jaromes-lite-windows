@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/art/hero.gif" alt="Jaromes Lite: Roamie, Anime Girl, JARVIS, Sarah and Adrian, little purple and pink pixel buddies, wave and chat in speech bubbles: At your service, Quiz time, Flashcards, Due tomorrow: chem, Let's focus" width="100%">
+  <img src="docs/art/hero.gif" alt="Jaromes Lite: Jarome, a pixel guy with spiky hair, headphones and round glasses, waves in the middle beside Roamie, Anime Girl, JARVIS and Sarah, all purple and pink, chatting in speech bubbles: Hey, I'm Jarome; Quiz time; Flashcards; Due tomorrow: chem; Let's crush this" width="100%">
 </p>
 
 <p align="center">
@@ -67,6 +67,7 @@ You don't need to be "good with computers". If you can talk, you can use it. �
 
 | | | |
 |:---:|---|---|
+| 🧑‍🎓 | **Meet Jarome** | Our very own study buddy: spiky hair, headphones, round glasses and a lot of hype. Or pick one of 8 other looks, each with its own voice. |
 | 🎙️ | **Talk or type** | Ask anything by voice or keyboard. It answers in a short, friendly way, and can even search the web for you. |
 | ⏰ | **Reminders & to-dos** | *"Remind me to call Mum at 6"*. It remembers, nudges you on time, and cheers when you finish. |
 | ☀️ | **Morning briefing** | The first time you talk each day, it tells you what's on today. |

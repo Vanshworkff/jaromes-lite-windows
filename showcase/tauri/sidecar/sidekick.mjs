@@ -153,16 +153,17 @@ const LOOKS = [
   ['sarah', 'Sarah', '933563129e564b19a115bedd57b7406a'],
   ['adrian', 'Adrian', 'bf322df2096a46f18c579d0baa36f41d'],
   ['rita', 'Rita X', '84aadb575ed74e9aa44ba7ab8619d1a1'],
+  ['jarome', 'Jarome', 'bf322df2096a46f18c579d0baa36f41d'], // Jaromes Lite's own buddy (shares Adrian's Fish Audio voice)
 ];
 const lookVoice = () => (LOOKS.find(([id]) => id === config.look) ?? LOOKS[0])[2];
 // The look's voice with Gemini and with VoiceStudio: the user's pick for it, else its own default.
 const geminiVoice = () => config.geminiVoices?.[config.look] ?? GEMINI_LOOK_VOICES[config.look] ?? GEMINI_DEFAULT_VOICE;
 const studioVoice = () => config.studioVoices?.[config.look] ?? null;
-// Its name is its look's: Roamie, JARVIS, GlayOS, Ultren, Anime Girl, Sarah, Adrian or Rita X. Jaromes Lite is the app.
+// Its name is its look's: Roamie, JARVIS, GlayOS, Ultren, Anime Girl, Sarah, Adrian, Rita X or Jarome. Jaromes Lite is the app.
 const lookName = () => (LOOKS.find(([id]) => id === config.look) ?? LOOKS[0])[1];
 // What each says when it's picked, in its own voice (Settings and the setup guide show the same words).
-const LOOK_GREETINGS = { classic: 'Classic me!', jarvis: 'At your service.', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', anime: 'Yay, hi hi!', sarah: 'Hey, nice to meet you!', adrian: "Alright, let's do this.", rita: 'Shall we get to work?' };
-const LOOK_BODY = { classic: 'a tiny glowing pixel creature', jarvis: 'a glowing sphere of light', glayos: 'a pixel robot head with one glowing eye', ultren: 'a pixel chrome robot with glowing eyes', anime: 'a pixel anime girl', sarah: 'a pixel woman', adrian: 'a pixel man', rita: 'a pixel secretary in cat-eye glasses' };
+const LOOK_GREETINGS = { classic: 'Classic me!', jarvis: 'At your service.', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', anime: 'Yay, hi hi!', sarah: 'Hey, nice to meet you!', adrian: "Alright, let's do this.", rita: 'Shall we get to work?', jarome: "Let's crush this!" };
+const LOOK_BODY = { classic: 'a tiny glowing pixel creature', jarvis: 'a glowing sphere of light', glayos: 'a pixel robot head with one glowing eye', ultren: 'a pixel chrome robot with glowing eyes', anime: 'a pixel anime girl', sarah: 'a pixel woman', adrian: 'a pixel man', rita: 'a pixel secretary in cat-eye glasses', jarome: 'a pixel guy with spiky hair, headphones and round glasses' };
 // How each one talks, kept short: the neutral ones in a few words, the characters as they really talk. The menace and the
 // barbs are style only; the help is the same.
 const LOOK_STYLE = {
@@ -174,6 +175,7 @@ const LOOK_STYLE = {
   sarah: 'friendly, easygoing and kind, like a good friend.',
   adrian: 'relaxed and straight-talking, a steady mate who keeps it simple.',
   rita: 'a sharp, organised secretary: crisp, efficient and a touch sassy.',
+  jarome: "an upbeat study coach and hype-man: encouraging, a bit goofy, quick with a memory trick or a mini challenge, and genuinely proud of every bit of progress.",
 };
 const VOICE_OK = hasVoice(process.platform);
 // Windows and Linux have no on-device speech API apps can use, so voice there runs Parakeet on the PC. Its model
