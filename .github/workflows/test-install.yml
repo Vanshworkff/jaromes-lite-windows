@@ -1,0 +1,57 @@
+# Installs Jaromes Lite on a fresh Windows PC exactly as a new user would (install.ps1), then checks it opens and starts.
+# Runs by hand (Actions → Test install → Run workflow), after each release build, and when the installer changes.
+name: Test install
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Build Windows app']
+    types: [completed]
+  push:
+    branches: [main]
+    paths: ['install.ps1', '.github/workflows/test-install.yml']
+
+jobs:
+  windows:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install like a new user would
+        shell: pwsh
+        env:
+          JAROMES_NO_LAUNCH: '1'
+        run: Get-Content ./install.ps1 -Raw | Invoke-Expression
+      - name: Check every part is installed and works
+        shell: pwsh
+        run: |
+          $app = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Jaromes Lite'), (Join-Path $env:LOCALAPPDATA 'Programs\Jaromes Lite') -Filter roamies.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $app) { throw 'roamies.exe is not where the installer puts it' }
+          $dir = $app.DirectoryName
+          "Installed in $dir"
+          $missing = @('roamies-node.exe', 'roamies-voice.exe', 'roamies-hands.exe', 'sidecar/sidekick.mjs', 'sidecar/meeting.mjs') | Where-Object { -not (Test-Path (Join-Path $dir $_)) }
+          if ($missing) { throw "The installed app is missing: $($missing -join ', ')" }
+          & (Join-Path $dir 'roamies-hands.exe') --self-test
+          if ($LASTEXITCODE) { throw "The hands helper failed its self-test ($LASTEXITCODE)" }
+          $perms = & (Join-Path $dir 'roamies-voice.exe') --perms
+          if (-not ($perms -match '"type":"perms"')) { throw "The voice helper didn't start: $perms" }
+          $data = Join-Path $env:RUNNER_TEMP 'jl'
+          New-Item -ItemType Directory -Force $data | Out-Null
+          Set-Content (Join-Path $data 'sidekick.json') '{"onboarded":true,"setupVersion":2,"voice":false}'
+          $env:ROAMIES_DATA_DIR = $data
+          $run = Start-Process -FilePath $app.FullName -PassThru
+          $logs = Join-Path $data 'sidekick/logs'
+          $started = $false
+          for ($i = 0; $i -lt 90; $i++) {
+            Start-Sleep -Seconds 1
+            if ($run.HasExited) { break }
+            if (Get-ChildItem $logs -Filter *.log -ErrorAction SilentlyContinue | Select-String -Pattern ' start ' -Quiet) { $started = $true; break }
+          }
+          $alive = -not $run.HasExited
+          if ($alive) { taskkill /PID $run.Id /T /F | Out-Null }
+          if (-not ($started -and $alive)) {
+            Get-Content (Join-Path $env:USERPROFILE '.gg/sidekick.log') -ErrorAction SilentlyContinue | Select-Object -Last 40
+            throw "Jaromes Lite didn't start (started: $started, still running: $alive)"
+          }
+          'Jaromes Lite started'
