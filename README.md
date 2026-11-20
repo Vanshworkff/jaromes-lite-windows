@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="Jaromes Lite: your little study buddy that lives on your screen" width="100%">
+  <img src="docs/art/hero.gif" alt="Jaromes Lite: Roamie, Anime Girl, JARVIS, Sarah and Adrian, little purple and pink pixel buddies, wave and chat in speech bubbles: At your service, Quiz time, Flashcards, Due tomorrow: chem, Let's focus" width="100%">
 </p>
 
 <p align="center">
@@ -98,6 +98,10 @@ flowchart LR
 ```
 
 ### 🧠 How the flashcards learn with you
+
+<p align="center">
+  <img src="docs/art/study.gif" alt="Roamie quizzes you on biology flashcards: a right answer comes back in 3 days, a missed one goes back to box 1, and it ends with 2 of 3 right and a 5-day streak" width="100%">
+</p>
 
 ```mermaid
 flowchart TD
