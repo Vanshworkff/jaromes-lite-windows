@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Jaromes Lite",
+  "version": "1.0.0",
+  "identifier": "com.vanshbohra.jaromeslite",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../sidecar/dist/": "sidecar/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "13.5"
+    },
+    "createUpdaterArtifacts": false,
+    "externalBin": [
+      "binaries/roamies-node"
+    ],
+    "copyright": "Jaromes by Vansh Bohra (AGPL-3.0)."
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxRkFCRkE4NTU5N0RFODcKUldTSDNwZFZxTC82UWJSdjFTd3huQmxkZElDU01STnBsamxoRStaV25qa01RbExHN2VCTC9DeTUK",
+      "endpoints": [
+        "https://github.com/Vanshworkff/jaromes-lite-windows/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}
