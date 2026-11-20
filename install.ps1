@@ -12,14 +12,17 @@ function Fail($msg) { Write-Host "x $msg" -ForegroundColor Red; throw $msg }
 if (-not [Environment]::Is64BitOperatingSystem) { Fail 'Jaromes Lite needs 64-bit Windows 10 or 11.' }
 Write-Host '( o_o )  Installing Jaromes Lite for Windows...' -ForegroundColor Magenta
 
-try { $rel = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ 'User-Agent' = 'jaromes-lite-installer' } }
+# The newest version, from the update feed (plain download links: no GitHub API, so no rate limit on shared networks).
+$latest = "https://github.com/$repo/releases/latest/download"
+try { $feed = Invoke-RestMethod "$latest/latest.json" -Headers @{ 'User-Agent' = 'jaromes-lite-installer' } }
 catch { Fail "Couldn't reach GitHub. Check your internet connection and try again." }
-$asset = $rel.assets | Where-Object { $_.name -like '*_windows-x64-setup.exe' } | Select-Object -First 1
-if (-not $asset) { Fail "Couldn't find the installer on the latest release." }
+$version = $feed.version
+if (-not $version) { Fail "Couldn't find the newest version." }
+$name = "Jaromes-Lite_${version}_windows-x64-setup.exe"
 
-$out = Join-Path $env:TEMP $asset.name
-Write-Host "Downloading $($rel.tag_name)..."
-Invoke-WebRequest $asset.browser_download_url -OutFile $out -UseBasicParsing -Headers @{ 'User-Agent' = 'jaromes-lite-installer' }
+$out = Join-Path $env:TEMP $name
+Write-Host "Downloading version $version..."
+Invoke-WebRequest "$latest/$name" -OutFile $out -UseBasicParsing -Headers @{ 'User-Agent' = 'jaromes-lite-installer' }
 Unblock-File $out
 
 # Close a running copy, then install silently for this user.
@@ -31,7 +34,7 @@ if ($p.ExitCode) { Fail "The installer stopped with code $($p.ExitCode)." }
 $app = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Jaromes Lite'), (Join-Path $env:LOCALAPPDATA 'Programs\Jaromes Lite'), (Join-Path $env:ProgramFiles 'Jaromes Lite') -Filter roamies.exe -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $app) { Fail "Installed, but couldn't find Jaromes Lite afterwards. Look for it in the Start menu." }
 
-Write-Host "Jaromes Lite $($rel.tag_name) is installed." -ForegroundColor Magenta
+Write-Host "Jaromes Lite $version is installed." -ForegroundColor Magenta
 if ($env:JAROMES_NO_LAUNCH -ne '1') {
   Start-Process $app.FullName
   Write-Host 'Opening it now: look for the pink buddy in the system tray (bottom right, maybe behind the ^ arrow), and follow the setup guide.'
