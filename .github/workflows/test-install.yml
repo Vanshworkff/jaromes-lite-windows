@@ -30,7 +30,7 @@ jobs:
           if (-not $app) { throw 'roamies.exe is not where the installer puts it' }
           $dir = $app.DirectoryName
           "Installed in $dir"
-          $missing = @('roamies-node.exe', 'roamies-voice.exe', 'roamies-hands.exe', 'sidecar/sidekick.mjs', 'sidecar/meeting.mjs') | Where-Object { -not (Test-Path (Join-Path $dir $_)) }
+          $missing = @('roamies-node.exe', 'roamies-voice.exe', 'roamies-hands.exe', 'sidecar/sidekick.mjs') | Where-Object { -not (Test-Path (Join-Path $dir $_)) }
           if ($missing) { throw "The installed app is missing: $($missing -join ', ')" }
           & (Join-Path $dir 'roamies-hands.exe') --self-test
           if ($LASTEXITCODE) { throw "The hands helper failed its self-test ($LASTEXITCODE)" }
