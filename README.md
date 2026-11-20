@@ -14,6 +14,8 @@
   <img alt="License AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-6b21a8?style=for-the-badge">
 </p>
 
+<p align="center"><b>Install on Windows: open PowerShell and paste <code>irm https://raw.githubusercontent.com/Vanshworkff/jaromes-lite-windows/main/install.ps1 | iex</code></b></p>
+
 <p align="center">
   🍎 On a Mac? → <a href="https://github.com/Vanshworkff/jaromes-lite-mac">jaromes-lite-mac</a>
   &nbsp;·&nbsp;
@@ -125,29 +127,37 @@ flowchart TD
 
 **You need:** Windows 10 or 11 (64-bit), and an AI account to give your buddy a brain: a **Claude** plan, a **ChatGPT** plan, or an API key from Anthropic, OpenAI or Google. The setup guide walks you through it.
 
-### 1. Download 📦
+### 1. Install it with one line ✨ (easiest)
 
-Go to **[Releases](../../releases)** and download **`Jaromes-Lite_…_windows-x64-setup.exe`**.
+Open **PowerShell** (press <kbd>⊞ Win</kbd>, type *PowerShell*, press <kbd>Enter</kbd>), paste this and press <kbd>Enter</kbd>:
 
-### 2. Run the installer 🖱️
-
-```
-   ┌───────────────────────────────────────────┐
-   │  Windows protected your PC                │
-   │                                           │
-   │  [ More info ]   ◀── 1. click this         │
-   │                                           │
-   │              [ Run anyway ] ◀── 2. then    │
-   └───────────────────────────────────────────┘
+```powershell
+irm https://raw.githubusercontent.com/Vanshworkff/jaromes-lite-windows/main/install.ps1 | iex
 ```
 
-Jaromes Lite is a free, open-source app without a paid Microsoft certificate, so Windows SmartScreen asks you to confirm once. Click **More info**, then **Run anyway**. The installer sets everything up for your user only; no admin password needed.
+That's it! It downloads the newest version, installs it just for you (no admin password needed) and opens it. Installed this way, Windows **doesn't show** the *"Windows protected your PC"* box. Run the same line again any time to reinstall.
 
-### 3. Find your buddy 🔍
+> 🔍 Curious what it does? [Read the installer](install.ps1): it only downloads the installer from this page's Releases and runs it.
 
-Look in the **system tray** at the bottom right, next to the clock. If you don't see it, click the little **^** arrow, then drag the Jaromes Lite icon onto the taskbar so it stays in view. 🎉
+### Or: download it yourself 📦
 
-### 4. Say hi! 👋
+<details>
+<summary>Prefer to download the installer by hand? Click here.</summary>
+
+1. Go to **[Releases](../../releases/latest)** and download **`Jaromes-Lite_…_windows-x64-setup.exe`**.
+2. Run it. Because it's a free app without a paid Microsoft certificate, Windows SmartScreen may stop it the first time:
+
+   ```
+     Windows protected your PC
+     [ More info ]   ◀── 1. click this
+                       [ Run anyway ] ◀── 2. then this
+   ```
+
+3. If your browser says the download *"isn't commonly downloaded"*, choose **Keep** (in Edge: **⋯ → Keep → Show more → Keep anyway**).
+
+</details>
+
+### 2. Say hi! 👋
 
 The setup guide opens by itself. It helps you pick your buddy's look and voice, and sign in to your AI account.
 
