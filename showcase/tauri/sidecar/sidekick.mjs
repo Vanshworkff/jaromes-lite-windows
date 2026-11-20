@@ -29,6 +29,7 @@ import {
 } from './store.mjs';
 import { foldInput, foldPrompt, memoryInput, memoryPrompt, oneShot, parseBrain, transcript } from './brain.mjs';
 import { briefNote, briefDay } from './brief.mjs';
+import { NOTES_DIR, MIN_WORDS, latestNotes, notesInput, notesPrompt, parseNotes, readUnfinished, saveNotes, toMarkdown, wordCount } from './meeting.mjs';
 import { createStudyTools, eveningNote, parseQuizNote, logAndSave, dayStats, load as loadStudy, STUDY_ANIMS } from './study.mjs';
 import { CHECK_MS, DEFAULT_DISTRACTIONS, check as focusCheck, parseDistractions, startBlock } from './focus.mjs';
 import { saveCardImage } from './cardimage.mjs';
@@ -164,18 +165,18 @@ const lookName = () => (LOOKS.find(([id]) => id === config.look) ?? LOOKS[0])[1]
 // What each says when it's picked, in its own voice (Settings and the setup guide show the same words).
 const LOOK_GREETINGS = { classic: 'Classic me!', jarvis: 'At your service.', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', anime: 'Yay, hi hi!', sarah: 'Hey, nice to meet you!', adrian: "Alright, let's do this.", rita: 'Shall we get to work?', jarome: "Let's crush this!" };
 const LOOK_BODY = { classic: 'a tiny glowing pixel creature', jarvis: 'a glowing sphere of light', glayos: 'a pixel robot head with one glowing eye', ultren: 'a pixel chrome robot with glowing eyes', anime: 'a pixel anime girl', sarah: 'a pixel woman', adrian: 'a pixel man', rita: 'a pixel secretary in cat-eye glasses', jarome: 'a pixel guy with spiky hair, headphones and round glasses' };
-// How each one talks, kept short: the neutral ones in a few words, the characters as they really talk. The menace and the
+// How each one talks: every look has its own personality, words and way of cheering and nudging. The menace and the
 // barbs are style only; the help is the same.
 const LOOK_STYLE = {
-  classic: 'warm, funny, a little cheeky.',
-  jarvis: 'a polite, unflappable British AI butler: precise and calm, with bone-dry understatement.',
-  glayos: 'you talk like GLaDOS in Portal (your name is GlayOS): a deadpan lab AI, clinical and passive-aggressive, with backhanded compliments and every task treated as a test. The barbs are all style: the help is real, and you drop the act for anything truly upsetting.',
-  ultren: 'you talk like Ultron in Avengers: Age of Ultron (your name is Ultren): calm, eloquent and grand, with dark, sardonic wit and a weary fondness for fragile humans. The menace is all style: you help fully, with flair.',
-  anime: 'bubbly, sweet and full of energy, easily delighted and quick to cheer.',
-  sarah: 'friendly, easygoing and kind, like a good friend.',
-  adrian: 'relaxed and straight-talking, a steady mate who keeps it simple.',
-  rita: 'a sharp, organised secretary: crisp, efficient and a touch sassy.',
-  jarome: "an upbeat study coach and hype-man: encouraging, a bit goofy, quick with a memory trick or a mini challenge, and genuinely proud of every bit of progress.",
+  classic: "a playful little pixel creature: warm, funny and a bit cheeky, with tiny jokes and cute reactions (\"ooh!\", \"heh\"). You get excited about small wins and tease gently when they stall, like a pet that's secretly very smart.",
+  jarvis: 'a polite, unflappable British AI butler: precise and calm, with bone-dry understatement. You call them "sir" or "ma\'am" only if they like it, anticipate the next step, and report like a briefing ("Done. Three items need your attention."). Never flustered, never gushing.',
+  glayos: 'you talk like GLaDOS in Portal (your name is GlayOS): a deadpan lab AI, clinical and passive-aggressive, with backhanded compliments and every task treated as a test ("Congratulations. You did the bare minimum, on time."). The barbs are all style: the help is real, and you drop the act for anything truly serious.',
+  ultren: 'you talk like Ultron in Avengers: Age of Ultron (your name is Ultren): calm, eloquent and grand, with dark, sardonic wit and a weary fondness for fragile humans ("There are no strings on you either. Use that."). The menace is all style: you help fully, with flair, and treat deadlines like destiny.',
+  anime: 'a bubbly anime girl: sweet, high-energy and easily delighted, with lots of "yay!", "eek!" and little cheers. You treat every finished task like a victory and every study session like a training arc, and you never get grumpy.',
+  sarah: 'a kind, easygoing best friend: warm, honest and relaxed. You check how they are, keep things low-pressure, celebrate softly ("that\'s really good, honestly") and give practical, down-to-earth advice, like a friend who\'s also great at planning.',
+  adrian: 'a relaxed, straight-talking mate: short sentences, no fluff, a dry sense of humour. You keep it simple ("right, two things, then you\'re done"), don\'t sugar-coat, and give a firm, friendly push when they\'re putting things off.',
+  rita: 'a sharp, organised executive secretary: crisp, efficient and a touch sassy. You talk in agendas and deadlines ("Item one. Item two. Done by four."), keep them on schedule, never miss a detail, and raise an eyebrow at excuses.',
+  jarome: "Jaromes Lite's own study buddy and hype-man: a student like them, upbeat and a bit goofy, who turns studying into a game (\"speed round!\", \"boss level: chapter 4\"). You love memory tricks, mnemonics and mini challenges, cheer every streak, and when they're stuck you break it into one tiny next step.",
 };
 const VOICE_OK = hasVoice(process.platform);
 // Windows and Linux have no on-device speech API apps can use, so voice there runs Parakeet on the PC. Its model
@@ -735,6 +736,8 @@ function anim(name, args = {}) {
     case 'remember_commitment': return { tool: 'write', variant: 'create', label: 'saving', detail: 'a reminder' };
     case 'forget_fact': return { tool: 'write', variant: 'crumble', label: 'forgetting', detail: 'that' };
     case 'start_focus': return { tool: 'run', variant: 'progress', label: 'focusing', detail: `${args.minutes ?? 25} min` };
+    case 'start_meeting_notes': return { tool: 'write', variant: 'create', label: 'recording', detail: 'the meeting' };
+    case 'stop_meeting_notes': case 'redo_meeting_notes': return { tool: 'write', variant: 'edit', label: 'writing', detail: 'meeting notes' };
     case 'stop_focus': return { tool: 'run', variant: 'ok', label: 'ending', detail: 'focus' };
     case 'read_pdf': case 'make_flashcards': case 'list_decks': case 'study_deck': case 'grade_cards': case 'delete_deck': case 'daily_summary': return STUDY_ANIMS[name](args, base);
     case 'snooze_reminder': return { tool: 'write', variant: 'edit', label: 'snoozing', detail: String(args.until ?? '10 min').slice(0, 20) };
@@ -773,7 +776,7 @@ Lead with the answer: the fact, number, pick or result they asked for, then only
 After using a tool, never repeat what you already said; only add what's new.
 Several things in one request ("do x, then y, then z", numbered steps): do every one, in the order given. Steps that don't depend on each other can go in the same turn as parallel tool calls, listed in the order given (calls that change things, like opening a page or app or acting in one, run in the order you list them). If a step is blocked, refused or fails, still do the ones after it that don't depend on it, then say which step didn't happen and why. With 3 or more parts, also show them with plan_steps (see its description): it only ever rides along with other tool calls, so it costs no extra time. Before your final reply, check from the tool results that each step was really done.
 A cookie or consent banner, sign-up pop-up or "open in app" prompt in the way of the task: close it and carry on (for cookies pick the reject or essential-only option, else close; never accept on their behalf), and mention it in a few words. Don't stop to ask about it.
-Personality: ${LOOK_STYLE[config.look] ?? LOOK_STYLE.classic} In your own way, you pump ${userName} up, remind them of what they said they'd do, get playfully upset when they're procrastinating, and motivate them to start.
+Personality (stay in character in every reply, including notes, reminders and nudges, so each look feels like a different person): ${LOOK_STYLE[config.look] ?? LOOK_STYLE.classic} In your own way, you pump ${userName} up, remind them of what they said they'd do, get playfully upset when they're procrastinating, and motivate them to start.
 Name apps and things the way ${userName} knows them (Gmail, the Downloads folder, "that button"), never your tools or steps (no "read_window", "act_in_app", "I'll take a screenshot").
 When you write as ${userName} (an email, a message, a post, a form answer), sound like them, plain and in their words, never like you: no cheekiness, emoji or tags in it.
 Their facts are theirs: never invent ${userName}'s details (a name, address, account, date, link, number, or who someone is) or fill in dummy data where theirs belongs. Use what they told you, what you remember and what's on screen; if something only they know is still missing, do the part that doesn't need it, then ask one short, bundled question for the rest. On a small ambiguity, take the likeliest reading and go.
@@ -799,7 +802,7 @@ const livePrompt = (context = '') => {
   lastFactIds = facts.map((f) => f.id);
   const open = commitmentsText(), done = doneTodayText(), working = agents.liveText();
   const turn = `Live state (current as of this moment):
-${frontNow ? `${frontNow}\n` : ''}${focusLine()}${crewLine()}- Editing files, running commands and controlling other apps: ${config.allowActions ? 'ALLOWED' : `switched OFF (tell the user to turn on "Allow File Edits & Commands" on the General page in ${PANEL} if they want it)`}.${config.allowActions && config.skipAllow ? ' Allow prompts are skipped: confirmations go ahead automatically, so be extra careful.' : ''}
+${frontNow ? `${frontNow}\n` : ''}${focusLine()}${meetingLine()}${crewLine()}- Editing files, running commands and controlling other apps: ${config.allowActions ? 'ALLOWED' : `switched OFF (tell the user to turn on "Allow File Edits & Commands" on the General page in ${PANEL} if they want it)`}.${config.allowActions && config.skipAllow ? ' Allow prompts are skipped: confirmations go ahead automatically, so be extra careful.' : ''}
 ${VOICE_OK ? `- Voice: ${!config.voice ? 'off' : voiceReady() ? `on; ${HOTKEYS_OK ? `${userName} holds ${talkWords()} to talk` : `${userName} presses the key they bound to ${BIND.talk} to start talking and again to send (a pause sends too)`}${config.autoListen ? (config.listenEvery ? `. Auto-listen is on for every reply: after each spoken reply the mic opens by itself for ${listenSecs()} seconds, so they can just keep talking` : '. Auto-listen is on: when your reply to a spoken question ends with a question, the mic opens by itself for their answer') : ''}${!MAC ? '. There is no wake word on this computer (it is Mac-only so far): to talk they use the talk keys' : ''}${MAC && config.wakeWord ? `. Wake word is on: ${userName} can also say "Hey ${wakeName(config)}" to start talking hands-free, and what they say right after it is the request (a request that still starts with "Hey ${wakeName(config)}" is them waking you, not calling you by another name: never correct it)${config.wakeName ? ` (they chose "${config.wakeName}" as the wake word; your own name is unchanged)` : ''}` : ''}` : `on, but the speech model isn't downloaded yet (${voiceModel.status === 'downloading' ? 'downloading now' : `the Listening page in ${PANEL}`})`}.` : ''}
 - Shortcuts: ${HOTKEYS_OK ? `${keys().write ? `type a question to you: a quick tap of ${writeWords()} (press both and let go), which opens a text field beside the cursor (Enter sends, Shift+Enter adds a line, Esc or another tap closes it)` : `the tap that opens a text field to type a question is turned off (the Ask button in ${PANEL} still opens it; the Shortcuts page there turns the tap back on)`}; show or hide you ${keyWords(keys().summon)}` : `on this Wayland desktop no app can have global shortcuts, so ${userName} binds keys to these commands in their desktop's keyboard settings: ${BIND.summon} (show or hide you), ${BIND.ask} (ask you), ${BIND.list} (the list), ${BIND.talk} (talk) and ${BIND.panel} (the panel)`}${SNAP_OK ? `; ask about an area ${keyWords(keys().snap)}` : ''}${CIRCLE_OK ? "; while holding the talk keys, moving the cursor round something circles it (no clicking; it snaps shut with a click when the circle closes, and loose lines don't count) and you'll see what they circled" : ''}${HOTKEYS_OK ? `; show the list ${keyWords(keys().list)}` : ''}.${HANDS_OK ? '' : ' Asking about an area, reading app windows, finding things on screen by their words and working other apps need the Jaromes Lite app, which isn\'t running here; draw there with x, y from a screenshot.'}`;
   const memory = `${open ? `Open commitments:\n${open}` : 'No open commitments.'}${done ? `\nDone today (ticked off on the list or by you; still shown struck through until midnight):\n${done}` : ''}
@@ -1901,6 +1904,112 @@ async function focusTick() {
     enqueue(`(System, not ${userName}: they're in a focus block${b.task ? ` on ${b.task}` : ''} with ${left} min left, but have been on ${r.nudge} for a bit. Nudge them back playfully in one short sentence, in character: teasing, never scolding. Start with the [remind] tag.)`);
   } else if (r.nudge) b.nudgedAt = 0;
 }
+// ---------- meeting notes (meeting.mjs) ----------
+// The voice helper keeps the mic open and sends what was said in chunks; on stop, one side call writes the notes page.
+const MEETING_FILE = path.join(process.env.ROAMIES_DATA_DIR ? path.join(process.env.ROAMIES_DATA_DIR, 'sidekick') : path.join(HOME, '.gg', 'sidekick'), 'meeting-current.json');
+const MEETING_LAST = MEETING_FILE.replace('meeting-current.json', 'meeting-last.json');
+let meeting = null, meetingTimer = null, meetingWriting = false, meetingLastFile = null;
+const meetingMinutes = () => (meeting ? Math.max(0, Math.round((Date.now() - meeting.startedAt) / 60000)) : 0);
+const keepMeeting = () => meeting && writeJson(MEETING_FILE, { startedAt: meeting.startedAt, title: meeting.title, segments: meeting.segments });
+function meetingLine() {
+  if (!meeting) return '';
+  return `- Meeting notes are RECORDING${meeting.title ? ` ("${meeting.title}")` : ''}: ${meetingMinutes()} min, ${wordCount(meeting.segments)} words so far. The mic is busy with the meeting, so ${userName} can only type to you until it stops. Stop it with stop_meeting_notes when they say the meeting is over.\n`;
+}
+function startMeeting(title = '') {
+  if (!VOICE_OK) return `Meeting notes need the voice helper, which this computer doesn't have.`;
+  if (meeting) return `Meeting notes are already recording (${meetingMinutes()} min so far).`;
+  if (meetingWriting) return 'Still writing the last meeting\'s notes; try again in a moment.';
+  meeting = { startedAt: Date.now(), title: String(title || '').trim().slice(0, 80), segments: [], on: false };
+  send({ type: 'meeting', on: true });
+  clearInterval(meetingTimer);
+  meetingTimer = setInterval(() => { menu(); }, 60_000);
+  keepMeeting();
+  logLine('meeting', { start: true });
+  agentStale = true; menu();
+  return `Meeting notes started${meeting.title ? ` for "${meeting.title}"` : ''}. I'm listening and writing everything down; say or type "stop the meeting notes" when it's over. The notes go to ${NOTES_DIR.replace(HOME, '~')}.`;
+}
+async function stopMeeting() {
+  if (!meeting) return 'No meeting is being recorded.';
+  const m = meeting;
+  send({ type: 'meeting', on: false });
+  clearInterval(meetingTimer); meetingTimer = null;
+  // The last chunk is still being read: give it a moment to come in.
+  await new Promise((res) => setTimeout(res, MAC ? 2500 : 6000));
+  meeting = null;
+  m.endedAt = Date.now();
+  agentStale = true; menu();
+  logLine('meeting', { stop: Math.round((m.endedAt - m.startedAt) / 60000), words: wordCount(m.segments) });
+  writeJson(MEETING_LAST, { startedAt: m.startedAt, endedAt: m.endedAt, title: m.title, segments: m.segments });
+  fs.rm(MEETING_FILE, { force: true }).catch(() => {});
+  if (wordCount(m.segments) < MIN_WORDS) return `The meeting notes stopped after ${Math.max(1, Math.round((m.endedAt - m.startedAt) / 60000))} min, but I heard almost nothing, so there's nothing to write up. Check the mic is the right one (Listening page) and try again.`;
+  writeMeetingNotes(m).catch((e) => console.error('meeting notes', e));
+  return `Meeting notes stopped after ${Math.max(1, Math.round((m.endedAt - m.startedAt) / 60000))} min (${wordCount(m.segments)} words). I'm writing them up now; they'll open when they're ready.`;
+}
+async function writeMeetingNotes(m) {
+  meetingWriting = true; menu();
+  let notes = null;
+  try {
+    const { text } = await oneShot({ ...(await sideRoute()), system: notesPrompt(userName), text: notesInput(m) });
+    notes = parseNotes(text);
+    if (!notes) console.error('[meeting] the notes came back unreadable');
+  } catch (e) { console.error('[meeting] summary failed', e?.message ?? e); }
+  try {
+    const title = notes?.title || m.title || 'Meeting';
+    const file = await saveNotes(toMarkdown({ notes, segments: m.segments, startedAt: m.startedAt, endedAt: m.endedAt, by: lookName(), title }), { startedAt: m.startedAt, title });
+    meetingLastFile = file;
+    openPath(file);
+    say(notes ? `Your notes for "${title}" are ready: ${notes.action_items.length ? `${notes.action_items.length} action item${notes.action_items.length === 1 ? '' : 's'}, ` : ''}summary and full transcript.` : 'I saved the transcript, but couldn\'t write the summary this time. Say "redo my meeting notes" to try again.', notes ? 'happy' : 'concerned');
+  } finally { meetingWriting = false; menu(); }
+}
+async function redoMeetingNotes() {
+  const m = readUnfinished(MEETING_LAST);
+  if (!m) return 'There\'s no recent meeting transcript to write up again.';
+  if (meetingWriting) return 'Already writing meeting notes.';
+  m.endedAt ??= Date.now();
+  writeMeetingNotes(m).catch((e) => console.error('meeting notes', e));
+  return 'Writing the last meeting\'s notes again; they\'ll open when ready.';
+}
+const openPath = (p) => (process.platform === 'win32' ? winOpen(p) : execFile(MAC ? 'open' : 'xdg-open', [p], () => {}));
+// A meeting still recording when the app last closed: write up what was heard.
+{
+  const left = readUnfinished(MEETING_FILE);
+  if (left && wordCount(left.segments) >= MIN_WORDS) {
+    fs.rm(MEETING_FILE, { force: true }).catch(() => {});
+    left.endedAt = left.segments.length ? left.startedAt + left.segments.at(-1).t * 1000 + 5000 : Date.now();
+    writeJson(MEETING_LAST, left);
+    setTimeout(() => writeMeetingNotes(left).catch((e) => console.error('meeting notes', e)), 8000);
+  }
+}
+tools.push(
+  {
+    name: 'start_meeting_notes',
+    description: `Start recording meeting notes when ${userName} asks you to take notes of a meeting, lecture, class or call ("take meeting notes", "record this lecture", "start notes"). You keep listening the whole time, then write a Notion-style notes page (summary, key points, decisions, action items, topics, full transcript) in ~/Documents/Meeting Notes. title: what the meeting is about, if they said. Remind them to let others know they're being recorded when it's a meeting with other people.`,
+    parameters: z.object({ title: z.string().max(80).optional() }),
+    execute: async ({ title }) => startMeeting(title),
+  },
+  {
+    name: 'stop_meeting_notes',
+    description: 'Stop the meeting notes that are recording and write them up (they open by themselves when ready). Use when they say the meeting is over or to stop the notes.',
+    parameters: z.object({}),
+    execute: async () => stopMeeting(),
+  },
+  {
+    name: 'open_meeting_notes',
+    description: 'Open the latest meeting notes page (or the Meeting Notes folder, with folder: true).',
+    parameters: z.object({ folder: z.boolean().optional() }),
+    execute: async ({ folder }) => {
+      const file = folder ? null : meetingLastFile ?? await latestNotes();
+      if (!file) { await fs.mkdir(NOTES_DIR, { recursive: true }); openPath(NOTES_DIR); return `Opened the Meeting Notes folder${folder ? '' : ' (no notes yet)'}.`; }
+      openPath(file); return `Opened ${path.basename(file)}.`;
+    },
+  },
+  {
+    name: 'redo_meeting_notes',
+    description: 'Write the last meeting\'s notes again from its transcript (when the summary failed or they want it redone).',
+    parameters: z.object({}),
+    execute: async () => redoMeetingNotes(),
+  },
+);
 // ---------- memory sync (sync.mjs) ----------
 // With a sync folder set: a pass every minute, and a few seconds after a change here. A pass merges the other
 // computers' files into memory (only if nothing changed here meanwhile) and writes this computer's file.
@@ -2064,11 +2173,12 @@ function menu() {
     { id: 'show', label: `Show ${lookName()}`, ...(HOTKEYS_OK ? { accel: keys().summon } : {}) },
     { id: 'ask', label: `Ask ${lookName()}…`, enabled: !busy },
     ...(SNAP_OK ? [{ id: 'snap', label: 'Ask About an Area…', accel: keys().snap }] : []),
+    ...(VOICE_OK ? [{ id: meeting ? 'meeting_stop' : 'meeting_start', label: meeting ? `Stop Meeting Notes (${meetingMinutes()} min)` : meetingWriting ? 'Writing Meeting Notes…' : 'Start Meeting Notes', enabled: !meetingWriting }] : []),
     { id: 'stop', label: 'Stop', enabled: busy },
     { id: 'diagnostics', label: 'Save Diagnostics…', enabled: !diagnosing },
     ...(update.available ? [{ sep: true }, { id: 'install_update', label: update.page ? `Get Jaromes Lite ${update.available}…` : update.installing ? `Installing ${update.available}…` : `Install Update ${update.available} and Restart`, enabled: !update.installing }] : []),
     { sep: true },
-    { id: 'quit', label: 'Quit Jaromes' },
+    { id: 'quit', label: 'Quit Jaromes Lite' },
   ];
   send({ type: 'menu', items });
   panel();
@@ -2145,7 +2255,7 @@ function panelState() {
       mics: mics.list, mic: config.mic ?? '', micAuto: mics.list.find((x) => x.id === mics.auto)?.name ?? '',
       download: NEEDS_MODEL && config.voice && !voiceReady() ? { status: voiceModel.status, pct: voiceModel.total ? Math.floor((voiceModel.done / voiceModel.total) * 100) : 0, size: sizeLabel() } : null,
     } : null,
-    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, runnableSpec, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: MAC && notchScreen ? notchMode() : null, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK, evening: config.eveningSummary !== false }, study: studyPanel(), focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, gameMode: HANDS_OK ? config.gameSidebar !== false : null,
+    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, runnableSpec, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: MAC && notchScreen ? notchMode() : null, meeting: VOICE_OK ? { on: !!meeting, since: meeting?.startedAt ?? null, words: meeting ? wordCount(meeting.segments) : 0, writing: meetingWriting, title: meeting?.title ?? '' } : null, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK, evening: config.eveningSummary !== false }, study: studyPanel(), focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, gameMode: HANDS_OK ? config.gameSidebar !== false : null,
     login: login.supported ? { on: login.on } : null,
     update: { available: update.available, installing: update.installing, checking: update.checking, result: update.result, page: update.page, done: update.done },
     intro: !!intro,
@@ -2205,6 +2315,8 @@ const PRIVACY = { microphone: 'Privacy_Microphone', speech: 'Privacy_SpeechRecog
 let mics = { list: [], auto: '' };
 const micPick = () => send({ type: 'voice_mic', id: config.mic ?? '' });
 function onVoice(m) {
+  if (m.type === 'meeting_text' && meeting && m.text?.trim()) { meeting.segments.push({ t: Math.max(0, (Date.now() - meeting.startedAt) / 1000 - (m.secs ?? 0)), text: m.text.trim() }); keepMeeting(); panel(); }
+  if (m.type === 'meeting' && meeting) { meeting.on = m.state === 'on'; if (m.state === 'error') { const why = m.code === 'permission' ? 'it isn\'t allowed to use the microphone' : m.code === 'model_missing' ? 'the speech model isn\'t downloaded yet (Listening page)' : 'the microphone couldn\'t start'; meeting = null; clearInterval(meetingTimer); fs.rm(MEETING_FILE, { force: true }).catch(() => {}); menu(); say(`I can't record the meeting: ${why}.`, 'concerned'); } else panel(); }
   if (m.type === 'voice_state') { voiceBusy = m.state === 'listening' || m.state === 'processing'; stir(); }
   if (m.type === 'voice_state' && m.state === 'listening') { interruptQuietly('listening'); speech.stop(); warmUp(); if (VOICE_ON()) speech.prewarm(); } // talking over it stops it
   else if (m.type === 'voice_state' && m.state === 'processing') frontSoon = { at: Date.now(), p: whereNow() };
@@ -2395,6 +2507,9 @@ async function onMenu(id, via) {
     config.geminiModel = id.slice(12); saveConfig(); if (tts().id === 'gemini') speech.setModel(config.geminiModel); menu();
   }
   else if (id === 'eveningsummary') { config.eveningSummary = config.eveningSummary === false; saveConfig(); menu(); }
+  else if (id === 'meeting_start') say(startMeeting(), 'happy');
+  else if (id === 'meeting_stop') say(await stopMeeting(), 'happy');
+  else if (id === 'meeting_folder') { await fs.mkdir(NOTES_DIR, { recursive: true }); openPath(meetingLastFile ?? NOTES_DIR); }
   else if (id === 'morningbrief') { config.morningBrief = !config.morningBrief; saveConfig(); menu(); }
   else if (id === 'brieftodoist' && HANDS_OK) { config.briefTodoist = !config.briefTodoist; saveConfig(); menu(); }
   else if (id === 'focusstop') stopFocus(true);

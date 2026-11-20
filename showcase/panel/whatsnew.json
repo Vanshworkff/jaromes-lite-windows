@@ -1,6 +1,22 @@
 {
   "updates": [
     {
+      "version": "1.1.0",
+      "date": "2026-11-20",
+      "items": [
+        {
+          "kind": "new",
+          "title": "Meeting notes",
+          "text": "Say \"take meeting notes\" or press Start on Home. I listen the whole meeting or lecture, then write a Notion-style page: summary, decisions, action items and the full transcript, in Documents/Meeting Notes."
+        },
+        {
+          "kind": "improved",
+          "title": "Everyone's their own person",
+          "text": "Each look now has a much stronger personality: how they talk, cheer you on and nudge you is all their own."
+        }
+      ]
+    },
+    {
       "version": "1.0.1",
       "date": "2026-11-20",
       "items": [

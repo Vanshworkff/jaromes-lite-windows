@@ -374,3 +374,8 @@ html, body { height: 100%; background: transparent; }
 
 /* Arabic and Hebrew in a list (dir=auto on the text): the Arabic font first, for its own word spacing. */
 .item .text:dir(rtl) { font-family: "Jaromes Arabic RTL", var(--mono); }
+
+/* Meeting notes on Home: the recording row glows. */
+.group.meeting .setting > span:first-child { color: var(--ink); }
+.group.meeting.rec .setting > span:first-child { color: var(--accent); }
+.group.meeting.rec { border-left: 2px solid var(--accent); padding-left: 10px; }

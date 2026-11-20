@@ -67,13 +67,14 @@ You don't need to be "good with computers". If you can talk, you can use it. �
 
 | | | |
 |:---:|---|---|
-| 🧑‍🎓 | **Meet Jarome** | Our very own study buddy: spiky hair, headphones, round glasses and a lot of hype. Or pick one of 8 other looks, each with its own voice. |
+| 🧑‍🎓 | **Meet Jarome** | Our very own study buddy: spiky hair, headphones, round glasses and a lot of hype. Or pick one of 8 other looks, each with its own voice **and personality**: a calm butler, a sassy secretary, a deadpan lab AI, a bubbly anime girl and more. |
 | 🎙️ | **Talk or type** | Ask anything by voice or keyboard. It answers in a short, friendly way, and can even search the web for you. |
 | ⏰ | **Reminders & to-dos** | *"Remind me to call Mum at 6"*. It remembers, nudges you on time, and cheers when you finish. |
 | ☀️ | **Morning briefing** | The first time you talk each day, it tells you what's on today. |
 | 📚 | **Flashcards** | *"Make flashcards from my biology PDF"*. It reads your notes and saves the cards in decks. |
 | 🧠 | **Smart quizzes** | *"Quiz me on bio"*. Cards you get right come back later; ones you miss come back soon (spaced repetition). |
 | 📄 | **Reads your PDFs** | Lecture slides, worksheets, textbook chapters: it explains, sums up or turns them into cards. |
+| 📝 | **Meeting notes** | *"Take meeting notes"*. It listens to the whole meeting or lecture, then writes a Notion-style page: summary, decisions, action items with owners, and the full transcript. |
 | 🎯 | **Focus timer** | *"Help me focus for 30 minutes"*. It gently teases you back if you wander off to YouTube. |
 | 🌙 | **Evening summary** | After 6 pm it tells you what you got done, how long you studied, your streak, and what's due tomorrow. |
 | 🖱️ | **Works your apps** | Fills in forms, clicks buttons, opens apps and files, and runs commands, always **asking first** before changing anything. |
@@ -179,11 +180,29 @@ You can change them in the panel: click the icon in the system tray → **Settin
 >
 > 🎙️ *"Focus for 45 minutes on my essay."*
 >
+> 🎙️ *"Take notes of this lecture."* … then *"Stop the meeting notes."*
+>
 > 🎙️ *"How did my day go?"*
 >
 > 🎙️ *"What's the weather in London tomorrow?"*
 
 Every small step counts. Five minutes of flashcards today beats a three-hour cram tomorrow. You've got this! 💪💜
+
+---
+
+## 📝 Meeting notes, like Notion
+
+```
+  "Take meeting notes" 🎙️  ──▶  ( ◕‿◕ ) listening…  ──▶  "Stop the meeting notes"  ──▶  📄 your notes open
+```
+
+<p align="center"><img src="docs/screenshots/meeting-notes.png" alt="A Jaromes Lite meeting notes page: title, summary, key points, decisions, action items with owners and due dates, discussion topics, open questions and the transcript" width="100%"></p>
+
+1. Say **"take meeting notes"** (or press **Start** under *Meeting notes* on the panel's Home page).
+2. Have your meeting, class or call. Jaromes Lite keeps listening and writing everything down, on your computer.
+3. Say or type **"stop the meeting notes"** (or press **Stop**). A minute later your notes open: **summary, key points, decisions, action items with owners and dates, topics, open questions** and the **full transcript** with timestamps.
+
+Notes are saved as Markdown pages in **Documents → Meeting Notes**, so they open anywhere and import straight into **Notion** (*Import → Markdown*). 🙋 If other people are in the meeting, let them know you're taking notes.
 
 ---
 

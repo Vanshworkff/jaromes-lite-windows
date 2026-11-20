@@ -578,7 +578,8 @@ enum WakeWord {
 
 final class Voice {
     // wake: listening quietly for "Hey Roamies" (no pill, nothing muted); hearing it turns into a hands-free take.
-    enum Phase { case idle, wake, armed, holding, handsFree, finishing }
+    // meeting: meeting notes. The mic stays open until told to stop; what was said goes out in chunks at pauses.
+    enum Phase { case idle, wake, armed, holding, handsFree, finishing, meeting }
 
     private var phase = Phase.idle
     // How long a hands-free take waits for words before giving up (auto-listen's setting; 8 s otherwise).
@@ -611,6 +612,8 @@ final class Voice {
     private var engineDevice: AudioDeviceID?
     private var wakeText = "", woke = false, wakeMiss: String?
     private var wakeWords = 0 // how many words the wake phrase took, in the take it started
+    // Meeting notes: when the current chunk started, and recogniser failures in a row (too many ends the meeting).
+    private var meetingSegAt = 0.0, meetingFails = 0, meetingFailAt = 0.0
     private var useAnalyzer: Bool { if #available(macOS 26, *) { return SpeechTranscriber.isAvailable } else { return false } }
 
     // The speech language for takes: "auto" follows the Mac's language list; otherwise a locale id such as "ar-SA" ({"cmd":"lang"}).
@@ -806,6 +809,10 @@ final class Voice {
             else if now - listenAt > Self.maxSession { end("max length"); finish() }
         case .finishing:
             break
+        case .meeting:
+            // A chunk goes out at a pause once it's said something, or at the latest every 50 s on a short quiet moment.
+            let quiet = now - max(heardAt, voiceAt), age = now - meetingSegAt
+            if !best.isEmpty && ((quiet > 1.0 && age > 4) || (age > 50 && quiet > 0.3) || age > 75) { meetingFlush(now) }
         }
     }
 
@@ -938,6 +945,60 @@ final class Voice {
         showListening("handsfree", uptime())
     }
 
+    // ---------- meeting notes ----------
+
+    func startMeeting() {
+        if phase == .wake { stopWake() }
+        if phase != .idle && phase != .meeting { cancel() }
+        guard phase == .idle else { return }
+        best = ""; woke = false; meetingFails = 0
+        let now = uptime()
+        listenAt = now; heardAt = now; voiceAt = now; meetingSegAt = now
+        phase = .meeting
+        log("meeting: start")
+        let mic = AVCaptureDevice.authorizationStatus(for: .audio)
+        if mic == .denied || mic == .restricted { phase = .idle; emit(["type": "meeting", "state": "error", "code": "permission"]); return }
+        ensureAuthorized { [weak self] in
+            guard let self, self.phase == .meeting, self.rec == nil else { return }
+            self.startAudio(device: InputDevice.picked())
+            let ok = self.phase == .meeting && self.rec != nil
+            if !ok { self.phase = .idle }
+            emit(["type": "meeting", "state": ok ? "on" : "error"])
+        }
+    }
+
+    func stopMeeting() {
+        guard phase == .meeting else { return }
+        meetingFlush(uptime(), recycle: false)
+        stopAudio()
+        rec?.cancel(); rec = nil
+        phase = .idle
+        best = ""
+        log("meeting: stop after \(Int(uptime() - listenAt)) s")
+        emit(["type": "meeting", "state": "off"])
+    }
+
+    /// Sends what's been said since the last chunk, then (recycle) carries on with a fresh recogniser on the open mic.
+    private func meetingFlush(_ now: Double, recycle: Bool = true) {
+        let text = best.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty { emit(["type": "meeting_text", "text": text, "secs": Int((now - meetingSegAt).rounded())]) }
+        best = ""; meetingSegAt = now; heardAt = now
+        guard recycle, phase == .meeting else { return }
+        feed.set(nil)
+        rec?.cancel(); rec = nil
+        guard let r = makeRecognizer() else { log("meeting: no recogniser"); emit(["type": "meeting", "state": "error", "code": "recognition"]); stopMeeting(); return }
+        rec = r; feed.set(r)
+    }
+
+    private func meetingFailed(_ msg: String) {
+        let now = uptime()
+        meetingFails = now - meetingFailAt < 10 ? meetingFails + 1 : 1
+        meetingFailAt = now
+        log("meeting: recognition \(msg) (\(meetingFails) in a row)")
+        if meetingFails >= 6 { emit(["type": "meeting", "state": "error", "code": "recognition"]); stopMeeting(); return }
+        meetingFlush(now)
+    }
+
     func externalCancel() {
         if phase == .armed || phase == .holding || phase == .handsFree { cancel() }
         blocked = true
@@ -1068,7 +1129,7 @@ final class Voice {
             onText: { [weak self] text in guard let self, self.rec === mine else { return }; self.onText(text) },
             onDone: { [weak self] in
                 guard let self, self.rec === mine else { return }
-                if self.phase == .wake { self.recycleWake(uptime()) } else if self.phase == .finishing { self.finalize() }
+                if self.phase == .wake { self.recycleWake(uptime()) } else if self.phase == .finishing { self.finalize() } else if self.phase == .meeting { self.meetingFlush(uptime()) }
             },
             onError: { [weak self] err in guard let self, self.rec === mine else { return }; self.onError(err) }
         )
@@ -1188,6 +1249,7 @@ final class Voice {
 
     private func onText(_ raw: String) {
         if phase == .wake { return heardWhileWaiting(raw) }
+        if phase == .meeting { if raw != best { best = raw; heardAt = uptime() }; return }
         // A take started by the wake phrase: the phrase itself isn't part of what was said.
         let text = woke ? (WakeWord.match(raw) ?? WakeWord.dropping(wakeWords, from: raw)) : raw
         guard text != best else { return }
@@ -1198,6 +1260,7 @@ final class Voice {
 
     private func onError(_ error: Error) {
         let msg = error.localizedDescription
+        if phase == .meeting { return meetingFailed(msg) }
         // Ending a request early reports "no speech"/cancel errors; only real failures reach the user.
         let ns = error as NSError
         let benign = ns.domain == "kAFAssistantErrorDomain" && [203, 216, 301, 1110].contains(ns.code)
@@ -1445,6 +1508,7 @@ Thread.detachNewThread {
         switch msg["cmd"] as? String {
         case "cancel": DispatchQueue.main.async { voice.externalCancel() }
         case "listen": let wait = msg["wait"] as? Double; DispatchQueue.main.async { voice.listenNow(wait: wait) }
+        case "meeting": let on = msg["on"] as? Bool == true; DispatchQueue.main.async { if on { voice.startMeeting() } else { voice.stopMeeting() } }
         // The sidekick is answering (it appears where the cursor is): the listening pill can go.
         case "handoff": DispatchQueue.main.async { voice.wave.handoff() }
         // The sidekick following the cursor in its cursor form, drawn here (buddy.swift) until the page takes it back.

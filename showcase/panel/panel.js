@@ -353,8 +353,23 @@
           null, // Jaromes Lite: no screen snaps
           state.busy ? btn('Stop', () => act('stop'), { k: 'stop' }) : btn('New chat', () => act('new'), { k: 'new', disabled: !state.canNew, aria: 'Start a new conversation' }),
           mac ? null : btn(`Show ${state.name}`, () => act('show', true), { k: 'show' }))),
+      meetingBox(),
       recentList(),
     ].flat();
+  }
+  // Meeting notes: start, stop and how it's going; the notes open by themselves when they're written.
+  function meetingBox() {
+    const m = state.meeting;
+    if (!m) return null;
+    const mins = m.on && m.since ? Math.max(0, Math.floor((Date.now() - m.since) / 60000)) : 0;
+    return el('div', { className: `group meeting${m.on ? ' rec' : ''}` },
+      el('div', { className: 'setting' },
+        el('span', {}, m.on ? '● Recording meeting' : m.writing ? 'Writing your notes…' : 'Meeting notes',
+          el('small', { textContent: m.on ? `${mins} min · ${m.words} word${m.words === 1 ? '' : 's'}${m.title ? ` · ${m.title}` : ''}` : m.writing ? 'They open by themselves when ready.' : 'Listens to a meeting or lecture, then writes a summary, action items and the transcript.' })),
+        el('span', { className: 'row-btns' },
+          m.on ? link('Stop', () => act('meeting_stop'), { k: 'meeting_stop', danger: true, aria: 'Stop recording and write the notes' })
+            : m.writing ? null : link('Start', () => act('meeting_start'), { k: 'meeting_start', aria: 'Start meeting notes' }),
+          link('Notes', () => act('meeting_folder'), { k: 'meeting_folder', aria: 'Open the meeting notes' }))));
   }
   function recentList() {
     const { box, nav } = paged('recent', state.recent, (r) => el('li', { className: `item ${r.kind}` },
@@ -1200,7 +1215,7 @@
       fallbacks: { on: true, slots: ['gemini:gemini-3.8-flash', ''], limited: [{ label: 'Claude', until: at + 40 * 60e3 }], using: 'gemini:gemini-3.8-flash' },
       // Effort per slot: '' is automatic (low); computer use is set to High, and backup 1 (Gemini, which only thinks at High) too.
       efforts: { default: '', computer: 'high', code: '', agents: '', draw: '', web: '', backup1: 'high', backup2: '' },
-      voice: { on: true, keys: '⌃⌥', ready: true, mac: true, lang: 'auto', langOnline: null, studioSpeak: 'short', mute: true, autoListen: q.has('listen'), listenEvery: false, listenSecs: 8, listenChoices: [3, 5, 8, 10, 15], mics: [{ id: 'BuiltIn', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], mic: '', micAuto: 'MacBook Pro Microphone', wakeWord: false, wakeName: 'Jaromes', download: null }, askKeys: '⌥⌘', brief: { on: true, todoist: false, canTodoist: true, evening: true }, study: { decks: 3, cards: 64, due: 12, today: 45, streak: 5 }, focus: { until: null, task: '', list: ['YouTube', 'Reddit', 'X', 'Steam', 'Netflix'], custom: false }, sync: { dir: '', at: null, error: null, paused: false }, shortcuts: { talk: { value: 'control+option', pairs: [['control+option', 'Control+Option'], ['option+command', 'Option+Command'], ['control+command', 'Control+Command'], ['control+shift', 'Control+Shift'], ['option+shift', 'Option+Shift']] }, keys: [{ id: 'summon', words: 'Control+Option+S' }, { id: 'snap', words: 'Control+Option+A' }, { id: 'list', words: 'Control+Option+L' }] }, writeKeys: { value: 'option+command', pairs: [['option+command', 'Option+Command'], ['control+command', 'Control+Command'], ['control+shift', 'Control+Shift'], ['option+shift', 'Option+Shift']] },
+      voice: { on: true, keys: '⌃⌥', ready: true, mac: true, lang: 'auto', langOnline: null, studioSpeak: 'short', mute: true, autoListen: q.has('listen'), listenEvery: false, listenSecs: 8, listenChoices: [3, 5, 8, 10, 15], mics: [{ id: 'BuiltIn', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], mic: '', micAuto: 'MacBook Pro Microphone', wakeWord: false, wakeName: 'Jaromes', download: null }, askKeys: '⌥⌘', meeting: { on: q.has('meeting'), since: at - 23 * 60e3, words: 2841, writing: false, title: q.has('meeting') ? 'Biology lecture' : '' }, brief: { on: true, todoist: false, canTodoist: true, evening: true }, study: { decks: 3, cards: 64, due: 12, today: 45, streak: 5 }, focus: { until: null, task: '', list: ['YouTube', 'Reddit', 'X', 'Steam', 'Netflix'], custom: false }, sync: { dir: '', at: null, error: null, paused: false }, shortcuts: { talk: { value: 'control+option', pairs: [['control+option', 'Control+Option'], ['option+command', 'Option+Command'], ['control+command', 'Control+Command'], ['control+shift', 'Control+Shift'], ['option+shift', 'Option+Shift']] }, keys: [{ id: 'summon', words: 'Control+Option+S' }, { id: 'snap', words: 'Control+Option+A' }, { id: 'list', words: 'Control+Option+L' }] }, writeKeys: { value: 'option+command', pairs: [['option+command', 'Option+Command'], ['control+command', 'Control+Command'], ['control+shift', 'Control+Shift'], ['option+shift', 'Option+Shift']] },
       sound: true, notch: q.has('notch') ? 'drop' : null, actions: false, skipAllow: false, login: { on: true },
       update: { available: new URLSearchParams(location.search).has('update') && new URLSearchParams(location.search).get('update') !== 'failed' ? '0.9.1' : null, installing: false, checking: false, result: null },
       intro: false,

@@ -105,16 +105,26 @@ fn spawn_engine(dir: PathBuf, tx: Sender<Ev>) -> (Sender<Job>, thread::JoinHandl
             }
         };
         while let Ok(first) = jrx.recv() {
-            // Only the newest live read matters; a closing read always runs.
+            // Only the newest live read matters; closing reads (and meeting chunks) all run, in order.
             let mut jobs = vec![first];
             jobs.extend(jrx.try_iter());
-            let job = match jobs.iter().rposition(|j| j.last) {
-                Some(i) => jobs.swap_remove(i),
-                None => jobs.pop().expect("at least one job"),
-            };
-            let text = transcribe(&mut asr, job.audio);
-            if tx.send(Ev::Text { take: job.take, text, last: job.last }).is_err() {
-                return;
+            let mut run: Vec<Job> = Vec::new();
+            let mut live: Option<Job> = None;
+            for j in jobs {
+                if j.last {
+                    run.push(j);
+                } else {
+                    live = Some(j);
+                }
+            }
+            if run.is_empty() {
+                run.extend(live);
+            }
+            for job in run {
+                let text = transcribe(&mut asr, job.audio);
+                if tx.send(Ev::Text { take: job.take, text, last: job.last }).is_err() {
+                    return;
+                }
             }
         }
     });
@@ -130,7 +140,12 @@ enum Phase {
     Holding,
     HandsFree,
     Finishing,
+    // Meeting notes: the mic stays open until told to stop; what was said goes out in chunks at pauses.
+    Meeting,
 }
+
+// Meeting chunks are read as takes from here up, so their words never mix with a talk's.
+const MEETING_TAKE: u64 = 1 << 40;
 
 const TAP_LIMIT: f64 = 0.25;
 // A release must last this long to count, so one glitchy frame of key state can't end a session.
@@ -215,6 +230,11 @@ struct Voice {
     tail_until: Option<f64>,
     final_until: Option<f64>,
     test_audio: Option<PathBuf>,
+    // Meeting notes: when the current chunk started, whether a voice was heard in it, and each chunk's length (s).
+    meeting_seg_at: f64,
+    meeting_voice: bool,
+    meeting_n: u64,
+    meeting_secs: std::collections::HashMap<u64, f64>,
     ink: ink::Ink,
     tx: Sender<Ev>,
     t0: Instant,
@@ -250,6 +270,10 @@ impl Voice {
             tail_until: None,
             final_until: None,
             test_audio,
+            meeting_seg_at: 0.0,
+            meeting_voice: false,
+            meeting_n: 0,
+            meeting_secs: std::collections::HashMap::new(),
             ink: ink::Ink::default(),
             tx,
             t0: Instant::now(),
@@ -277,6 +301,7 @@ impl Voice {
         self.ink.follow(now);
         match self.phase {
             Phase::Holding | Phase::HandsFree => self.maybe_read(now),
+            Phase::Meeting => self.meeting_tick(now),
             Phase::Finishing => {
                 if self.tail_until.is_some_and(|t| now >= t) {
                     self.tail_until = None;
@@ -361,7 +386,7 @@ impl Voice {
                     self.finish();
                 }
             }
-            Phase::Finishing => {}
+            Phase::Finishing | Phase::Meeting => {}
         }
     }
 
@@ -476,6 +501,14 @@ impl Voice {
     }
 
     fn on_text(&mut self, take: u64, text: String, last: bool) {
+        if take >= MEETING_TAKE {
+            let secs = self.meeting_secs.remove(&take).unwrap_or(0.0);
+            let text = text.trim();
+            if !text.is_empty() {
+                emit(json!({ "type": "meeting_text", "text": text, "secs": secs.round() }));
+            }
+            return;
+        }
         if take != self.take {
             return;
         }
@@ -507,6 +540,9 @@ impl Voice {
         }
         if v > SPEECH_LEVEL && self.phase != Phase::Idle {
             self.spoke = true;
+            if self.phase == Phase::Meeting {
+                self.meeting_voice = true;
+            }
         }
         if !matches!(self.phase, Phase::Holding | Phase::HandsFree) || now - self.level_at < 0.05 {
             return;
@@ -562,6 +598,72 @@ impl Voice {
         emit(json!({ "type": "state", "state": "idle", "cancelled": true }));
     }
 
+    // ---------- meeting notes ----------
+
+    fn start_meeting(&mut self) {
+        if self.phase == Phase::Meeting {
+            return;
+        }
+        if self.phase != Phase::Idle {
+            self.cancel();
+        }
+        if self.engine.is_none() {
+            let code = if self.engine_error.is_some() { "recognition" } else { "model_missing" };
+            return emit(json!({ "type": "meeting", "state": "error", "code": code }));
+        }
+        if !keys::mic_allowed() {
+            return emit(json!({ "type": "meeting", "state": "error", "code": "permission" }));
+        }
+        let now = self.now();
+        self.listen_at = now;
+        self.voice_at = now;
+        self.meeting_seg_at = now;
+        self.meeting_voice = false;
+        self.phase = Phase::Meeting;
+        self.start_audio();
+        if self.phase != Phase::Meeting || self.source.is_none() {
+            self.phase = Phase::Idle;
+            return emit(json!({ "type": "meeting", "state": "error", "code": "no_input" }));
+        }
+        log("meeting: start");
+        emit(json!({ "type": "meeting", "state": "on" }));
+    }
+
+    fn stop_meeting(&mut self) {
+        if self.phase != Phase::Meeting {
+            return;
+        }
+        let now = self.now();
+        self.meeting_flush(now);
+        self.stop_audio();
+        self.phase = Phase::Idle;
+        log(&format!("meeting: stop after {:.0}s", now - self.listen_at));
+        emit(json!({ "type": "meeting", "state": "off" }));
+    }
+
+    // A chunk goes out at a pause once it's at least 6 s long, or at the latest at 25 s.
+    fn meeting_tick(&mut self, now: f64) {
+        let secs = self.buf.lock().unwrap().len() as f64 / RATE as f64;
+        if secs >= 25.0 || (secs >= 6.0 && now - self.voice_at > 0.9) {
+            self.meeting_flush(now);
+        }
+    }
+
+    fn meeting_flush(&mut self, now: f64) {
+        let audio = std::mem::take(&mut *self.buf.lock().unwrap());
+        let voice = std::mem::replace(&mut self.meeting_voice, false);
+        self.meeting_seg_at = now;
+        // Parakeet makes up words from silence, so a chunk with no voice in it isn't read.
+        if !voice || audio.len() < RATE as usize / 2 {
+            return;
+        }
+        let Some(engine) = &self.engine else { return };
+        self.meeting_n += 1;
+        let take = MEETING_TAKE + self.meeting_n;
+        self.meeting_secs.insert(take, audio.len() as f64 / RATE as f64);
+        let _ = engine.send(Job { take, audio, last: true });
+    }
+
     /// Start listening hands-free without a key press (after an area snap). Ends on a pause or a tap.
     fn listen_now(&mut self, wait: Option<f64>) {
         if self.phase != Phase::Idle {
@@ -585,7 +687,7 @@ impl Voice {
                 self.end("toggled", now);
                 self.finish();
             }
-            Phase::Finishing => {}
+            Phase::Finishing | Phase::Meeting => {}
         }
     }
 
@@ -604,6 +706,13 @@ impl Voice {
                 Some("cancel") => self.external_cancel(),
                 Some("listen") => self.listen_now(msg.get("wait").and_then(Value::as_f64)),
                 Some("toggle") => self.toggle(),
+                Some("meeting") => {
+                    if msg.get("on").and_then(Value::as_bool) == Some(true) {
+                        self.start_meeting()
+                    } else {
+                        self.stop_meeting()
+                    }
+                }
                 // The panel's mic picker: the list, and a pick (a name from it; none or "" is the default), used from the
                 // next time the mic opens.
                 Some("mics") => emit(audio::mics()),
@@ -626,6 +735,10 @@ impl Voice {
                 if matches!(self.phase, Phase::Armed | Phase::Holding | Phase::HandsFree) {
                     emit(mic_error(&e));
                     self.cancel();
+                } else if self.phase == Phase::Meeting {
+                    self.stop_audio();
+                    self.phase = Phase::Idle;
+                    emit(json!({ "type": "meeting", "state": "error", "code": "no_input" }));
                 }
             }
             Ev::Text { take, text, last } => self.on_text(take, text, last),

@@ -259,6 +259,11 @@ fn handle_voice(app: &AppHandle, msg: Value) {
         to_overlays(app, &ui);
         return;
     }
+    // Meeting notes: its state and each chunk of what was said go straight to the sidecar.
+    if matches!(msg.get("type").and_then(Value::as_str), Some("meeting") | Some("meeting_text")) {
+        to_sidecar(app, &msg);
+        return;
+    }
     // While the setup guide is open, talking is just the "try it" test: it never reaches the agent.
     if ONBOARDING.load(Ordering::Relaxed) {
         // Nothing answers here, so the listening pill goes as soon as the words are in.

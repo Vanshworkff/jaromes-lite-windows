@@ -34,6 +34,10 @@ export function describe(name, args = {}) {
       const what = /^https?:\/\//i.test(t) ? host(t) : short(base(t));
       return [`Opening ${what}`, `Opened ${what}`];
     }
+    case 'start_meeting_notes': return ['Starting meeting notes', 'Started meeting notes'];
+    case 'stop_meeting_notes': return ['Stopping meeting notes', 'Stopped meeting notes'];
+    case 'open_meeting_notes': return ['Opening meeting notes', 'Opened meeting notes'];
+    case 'redo_meeting_notes': return ['Rewriting meeting notes', 'Rewrote meeting notes'];
     case 'read_pdf': return [`Reading ${short(base(args.path))}`, `Read ${short(base(args.path))}`];
     case 'make_flashcards': return ['Making flashcards', 'Made flashcards'];
     case 'list_decks': return ['Checking your decks', 'Checked your decks'];
