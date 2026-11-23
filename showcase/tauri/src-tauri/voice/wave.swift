@@ -5,6 +5,26 @@
 import AppKit
 import QuartzCore
 
+/// The colour theme's native colours (set by {"cmd":"theme"}); the pill is rebuilt with them the next time it shows.
+enum ThemeColors {
+    static var accent = CGColor(srgbRed: 0xff / 255, green: 0x78 / 255, blue: 0xd6 / 255, alpha: 1)
+    static var line = CGColor(srgbRed: 0xc4 / 255, green: 0x28 / 255, blue: 0x95 / 255, alpha: 1)
+    static var bg = CGColor(srgbRed: 0x10 / 255, green: 0x05 / 255, blue: 0x14 / 255, alpha: 1)
+    static var rim = CGColor(srgbRed: 0x47 / 255, green: 0x0e / 255, blue: 0x60 / 255, alpha: 0.6)
+    static var version = 0
+    static func cg(_ hex: String?, alpha: CGFloat = 1) -> CGColor? {
+        guard let hex, hex.hasPrefix("#"), hex.count == 7, let n = UInt32(hex.dropFirst(), radix: 16) else { return nil }
+        return CGColor(srgbRed: CGFloat(n >> 16) / 255, green: CGFloat((n >> 8) & 255) / 255, blue: CGFloat(n & 255) / 255, alpha: alpha)
+    }
+    static func set(_ m: [String: Any]) {
+        if let c = cg(m["accent"] as? String) { accent = c }
+        if let c = cg(m["line"] as? String) { line = c }
+        if let c = cg(m["bg"] as? String) { bg = c }
+        if let c = cg(m["rim"] as? String, alpha: 0.6) { rim = c }
+        version += 1
+    }
+}
+
 final class Wave {
     private static let w: CGFloat = 50, h: CGFloat = 24, barW: CGFloat = 3, gap: CGFloat = 2.5, minH: CGFloat = 4, maxH: CGFloat = 16
     // Taller in the middle, and each bar wobbles at its own pace so it reads as a voice, not a meter.
@@ -52,20 +72,20 @@ final class Wave {
         let root = view.layer!
         let pill = CAShapeLayer()
         pill.path = Self.pixelPill(CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5))
-        pill.fillColor = CGColor(srgbRed: 0x05 / 255, green: 0x12 / 255, blue: 0x14 / 255, alpha: 0.94)
-        pill.strokeColor = CGColor(srgbRed: 0x4f / 255, green: 0xbf / 255, blue: 0xa9 / 255, alpha: 1)
+        pill.fillColor = ThemeColors.bg.copy(alpha: 0.94)
+        pill.strokeColor = ThemeColors.line
         pill.lineWidth = 1
         root.addSublayer(pill)
         let host = CALayer()
         host.frame = root.bounds
-        host.shadowColor = CGColor(srgbRed: 0x78 / 255, green: 1, blue: 0xe2 / 255, alpha: 1)
+        host.shadowColor = ThemeColors.accent
         host.shadowOpacity = 0.8
         host.shadowRadius = 3
         host.shadowOffset = .zero
         root.addSublayer(host)
         let bars: [CALayer] = (0 ..< Self.shape.count).map { _ in
             let b = CALayer()
-            b.backgroundColor = CGColor(srgbRed: 0x78 / 255, green: 1, blue: 0xe2 / 255, alpha: 1)
+            b.backgroundColor = ThemeColors.accent
             host.addSublayer(b)
             return b
         }
@@ -75,6 +95,12 @@ final class Wave {
 
     /// A panel made for another set of displays can sit at alpha 1 and never be on screen, so when the displays change
     /// it is built again (never with no display attached). If the pill was showing, the new one takes its place at once.
+    /// The colour theme changed: build the pill again in its colours.
+    func retheme() {
+        builtScreens = []
+        rebuildIfScreensChanged()
+    }
+
     private func rebuildIfScreensChanged() {
         let now = currentScreenKeys()
         guard screensChanged(built: builtScreens, now: now) else { return }

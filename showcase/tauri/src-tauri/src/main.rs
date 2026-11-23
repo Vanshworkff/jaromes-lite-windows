@@ -1756,6 +1756,12 @@ fn handle_sidecar(app: &AppHandle, msg: Value) {
         // Listen right away, hands-free (after an area snap: snap, then just talk).
         // wait: seconds the mic waits for words (auto-listen's setting, #44).
         Some("listen") => to_voice(app, &json!({ "cmd": "listen", "wait": msg.get("wait").cloned().unwrap_or(Value::Null) })),
+        // Colour theme: the native listening pill and pen take the theme's colours.
+        Some("voice_theme") => {
+            let mut m = msg.clone();
+            m["cmd"] = json!("theme");
+            to_voice(app, &m);
+        }
         // Meeting notes: the voice helper keeps the mic open and sends what was said in chunks until told to stop.
         Some("meeting") => to_voice(app, &json!({ "cmd": "meeting", "on": msg.get("on").and_then(Value::as_bool) == Some(true) })),
         // Linux: the sidecar's screenshot and copy go through the shell (GTK, X11 and the desktop portal).

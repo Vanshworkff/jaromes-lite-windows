@@ -1177,6 +1177,8 @@
     render() {
       $('h-0').textContent = `Hi, I'm ${(LOOKS.find(([v]) => v === (state?.look ?? 'classic')) ?? LOOKS[0])[1]}.`;
       look.radios('looks', LOOKS, state?.look ?? 'classic', (v) => { state.look = v; sidekick.setLook?.(v); send({ type: 'ob_look', look: v }); quip(LOOK_QUIPS[v]); look.render(); });
+      const TH = Object.entries(window.RoamieTheme?.THEMES ?? {}).map(([id, t]) => [id, t.label]);
+      if (TH.length) look.radios('themes', TH, state?.theme ?? window.RoamieTheme.current, (v) => { state.theme = v; window.RoamieTheme.set(v); send({ type: 'ob_theme', theme: v }); quip('New colours!'); look.render(); });
       look.radios('sizes', SIZES, state?.size ?? 'default', (v) => { state.size = v; sidekick.setForm?.(v); send({ type: 'ob_size', size: v }); quip(SIZE_QUIPS[v]); look.render(); });
     },
   };
@@ -1273,6 +1275,7 @@
         $('lite-switch').setAttribute('aria-checked', String(!!msg.lite));
         if (Roamie.sfx) Roamie.sfx.enabled = msg.sound !== false;
         if (first) { sidekick.setLook?.(msg.look); sidekick.setForm?.(msg.size); }
+        if (msg.theme) window.RoamieTheme?.set(msg.theme);
         if (at('welcome')) look.render();
         if (first) go(MODE === 'chat' ? 0 : clamp(msg.step | 0, 0, STEPS.length - 1));
         else { if (at('perms')) perms.render(); if (at('ai')) ai.render(); if (at('voice')) replies.render(); if (at('keys')) keys.render(); }

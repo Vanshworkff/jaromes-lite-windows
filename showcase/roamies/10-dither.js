@@ -25,7 +25,7 @@
     create(env) {
       const { clamp, rand } = Roamie;
       const S = (n) => Roamie.sfx?.play(n);
-      const PAL = o.pal, L = PAL.length - 1;
+      const PAL = window.RoamieTheme ? RoamieTheme.livePal(o.pal) : o.pal, L = PAL.length - 1;
       const { n: PN, t: PT } = PATTERNS[o.pattern ?? 'bayer4'], PM = PN - 1;
       // The dither pattern is pinned to the screen, or to the body while it follows the cursor (tox, toy: its cell),
       // so the shading doesn't crawl across it as it moves.

@@ -1508,6 +1508,7 @@ Thread.detachNewThread {
         switch msg["cmd"] as? String {
         case "cancel": DispatchQueue.main.async { voice.externalCancel() }
         case "listen": let wait = msg["wait"] as? Double; DispatchQueue.main.async { voice.listenNow(wait: wait) }
+        case "theme": DispatchQueue.main.async { ThemeColors.set(msg); voice.wave.retheme() }
         case "meeting": let on = msg["on"] as? Bool == true; DispatchQueue.main.async { if on { voice.startMeeting() } else { voice.stopMeeting() } }
         // The sidekick is answering (it appears where the cursor is): the listening pill can go.
         case "handoff": DispatchQueue.main.async { voice.wave.handoff() }

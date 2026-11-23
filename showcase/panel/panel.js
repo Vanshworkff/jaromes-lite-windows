@@ -371,6 +371,126 @@
             : m.writing ? null : link('Start', () => act('meeting_start'), { k: 'meeting_start', aria: 'Start meeting notes' }),
           link('Notes', () => act('meeting_folder'), { k: 'meeting_folder', aria: 'Open the meeting notes' }))));
   }
+  // ---------------------------------------------------------------- Meeting notes
+  // Record, then read, edit and improve the notes right here. The app keeps the files (Documents/Meeting Notes).
+  const mn = { list: null, open: null, ta: null, busy: '', armDel: false };
+  const mnSend = (type, extra = {}) => send({ type, ...extra });
+  const mnWhen = (ms) => new Date(ms).toLocaleDateString([], { day: 'numeric', month: 'short' }) + ', ' + new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  function meetingsPage() {
+    if (mn.list === null) { mn.list = []; mnSend('mnotes_list'); }
+    if (mn.open) return noteEditor();
+    const m = state.meeting ?? {};
+    const mins = m.on && m.since ? Math.max(0, Math.floor((Date.now() - m.since) / 60000)) : 0;
+    const { box, nav } = paged('mnotes', mn.list, (n) => {
+      const b = el('button', { className: 'px noterow', type: 'button', 'data-k': `mnote:${n.name}` },
+        el('span', { className: 'text', textContent: n.title, title: n.title }),
+        el('span', { className: 'meta', textContent: `${mnWhen(n.when)}${n.mins ? ` · ${n.mins} min` : ''}` }));
+      b.addEventListener('click', () => { mn.open = { name: n.name, title: n.title, text: null, dirty: false, edit: false }; mn.ta = null; mn.armDel = false; mnSend('mnotes_read', { name: n.name }); render(); });
+      return el('li', { className: 'noteli' }, b);
+    }, { label: 'Your notes', empty: 'No notes yet. Press Start before your next class or meeting.' });
+    return [
+      el('div', { className: `group meeting${m.on ? ' rec' : ''}` },
+        el('div', { className: 'setting' },
+          el('span', {}, m.on ? '● Recording' : m.writing ? 'Writing your notes…' : 'Take meeting notes',
+            el('small', { textContent: m.on ? `${mins} min · ${m.words ?? 0} words${m.title ? ` · ${m.title}` : ''}` : m.writing ? 'They open here when ready.' : 'I listen to a meeting, class or call, then write it all up.' })),
+          el('span', { className: 'row-btns' },
+            m.on ? link('Stop', () => act('meeting_stop'), { k: 'meeting_stop', danger: true, aria: 'Stop recording and write the notes' })
+              : m.writing ? null : link('Start', () => act('meeting_start'), { k: 'meeting_start', aria: 'Start meeting notes' }),
+            link('Folder', () => act('meeting_folder'), { k: 'meeting_folder', aria: 'Open the Meeting Notes folder' }))),
+        m.on && m.live?.length ? el('div', { className: 'live', 'aria-live': 'polite' }, m.live.map((s) => el('p', {}, el('b', { textContent: `${s.at} ` }), s.text))) : null),
+      el('div', { className: 'group paged' }, el('div', { className: 'ghead' }, el('h2', { textContent: 'Your notes' })), box),
+      nav ? foot(null, nav) : null,
+    ];
+  }
+  // Inline: **bold**, `code`, #tags.
+  function mdInline(text) {
+    const out = [];
+    for (const part of String(text).split(/(\*\*[^*]+\*\*|`[^`]+`)/)) {
+      if (!part) continue;
+      if (part.startsWith('**') && part.endsWith('**')) out.push(el('b', { textContent: part.slice(2, -2) }));
+      else if (part.startsWith('`') && part.endsWith('`')) out.push(el('code', { textContent: part.slice(1, -1) }));
+      else out.push(part);
+    }
+    return out;
+  }
+  // The notes as a page: headings, callouts, lists, tickable to-dos (a tick edits the text), rules, paragraphs.
+  function mdView(text, onTick) {
+    const lines = String(text).split('\n'), out = [];
+    let list = null;
+    const close = () => { list = null; };
+    lines.forEach((line, i) => {
+      const todo = line.match(/^- \[( |x|X)\] (.*)$/);
+      if (todo) {
+        if (!list || list.tagName !== 'UL') { list = el('ul', { className: 'todos' }); out.push(list); }
+        const done = todo[1] !== ' ';
+        const cb = el('input', { type: 'checkbox', checked: done, 'aria-label': todo[2] });
+        cb.addEventListener('change', () => onTick(i, cb.checked));
+        list.append(el('li', { className: done ? 'done' : '' }, el('label', {}, cb, el('span', {}, ...mdInline(todo[2])))));
+        return;
+      }
+      if (/^- /.test(line)) {
+        if (!list || list.className !== 'bul') { list = el('ul', { className: 'bul' }); out.push(list); }
+        list.append(el('li', {}, ...mdInline(line.slice(2))));
+        return;
+      }
+      close();
+      if (/^### /.test(line)) out.push(el('h4', {}, ...mdInline(line.slice(4))));
+      else if (/^## /.test(line)) out.push(el('h3', {}, ...mdInline(line.slice(3))));
+      else if (/^# /.test(line)) out.push(el('h2', { className: 'ntitle' }, ...mdInline(line.slice(2))));
+      else if (/^> /.test(line)) out.push(el('div', { className: 'callout' }, ...mdInline(line.slice(2))));
+      else if (/^---\s*$/.test(line)) out.push(el('hr'));
+      else if (line.trim()) out.push(el('p', {}, ...mdInline(line)));
+    });
+    return out;
+  }
+  function noteEditor() {
+    const o = mn.open;
+    if (!mn.ta) {
+      mn.ta = el('textarea', { className: 'px noteedit', spellcheck: 'true', 'aria-label': `Edit ${o.title}` });
+      mn.ta.addEventListener('input', () => { o.text = mn.ta.value; if (!o.dirty) { o.dirty = true; render(); } });
+    }
+    if (o.text != null && mn.ta.value !== o.text && document.activeElement !== mn.ta) mn.ta.value = o.text;
+    mn.ta.disabled = o.text == null || !!mn.busy;
+    const busy = (k, label) => (mn.busy === k ? `${label}…` : label);
+    const doAct = (action) => { mn.busy = action; mnSend('mnotes_act', { name: o.name, action, text: mn.ta.value }); render(); };
+    return [
+      el('div', { className: 'mhead noteshead' },
+        link('‹ All notes', () => { if (o.dirty && !confirm('Leave without saving your changes?')) return; mn.open = null; mn.ta = null; render(); }, { k: 'mnote_back' }),
+        el('h2', { className: 'notetitle', textContent: o.title, title: o.title })),
+      el('div', { className: 'notetools' },
+        btn(o.edit ? 'Done editing' : '✏️ Edit', () => { o.edit = !o.edit; if (o.edit) setTimeout(() => mn.ta?.focus(), 0); render(); }, { k: 'mnote_edit', disabled: o.text == null }),
+        btn(o.dirty ? 'Save' : 'Saved', () => { mn.busy = 'save'; mnSend('mnotes_save', { name: o.name, text: mn.ta.value }); render(); }, { kind: o.dirty ? 'primary' : 'ghost', k: 'mnote_save', disabled: !o.dirty || !!mn.busy }),
+        btn(busy('improve', '✨ Improve'), () => doAct('improve'), { k: 'mnote_improve', disabled: !!mn.busy || o.text == null, title: 'Tidy and sharpen the notes (you check before saving)' }),
+        btn(busy('cards', '📚 Flashcards'), () => doAct('cards'), { k: 'mnote_cards', disabled: !!mn.busy || o.text == null, title: 'Make a flashcard deck from these notes' }),
+        btn(busy('reminders', '⏰ Reminders'), () => doAct('reminders'), { k: 'mnote_rem', disabled: !!mn.busy || o.text == null, title: 'Add the action items to your reminders' })),
+      o.edit || o.text == null ? el('div', { className: 'notebody' }, mn.ta)
+        : el('div', { className: 'noteview' }, ...mdView(o.text, (i, on) => {
+          const ls = o.text.split('\n'); ls[i] = ls[i].replace(/^- \[[ xX]\]/, on ? '- [x]' : '- [ ]');
+          o.text = ls.join('\n'); if (mn.ta) mn.ta.value = o.text;
+          mn.busy = 'save'; mnSend('mnotes_save', { name: o.name, text: o.text }); render();
+        })),
+      el('div', { className: 'notefoot' },
+        link('Open in another app', () => mnSend('mnotes_act', { name: o.name, action: 'open' }), { k: 'mnote_open' }),
+        mn.armDel ? link('Yes, delete it', () => { mnSend('mnotes_act', { name: o.name, action: 'delete' }); mn.open = null; mn.ta = null; mn.armDel = false; render(); }, { k: 'mnote_del2', danger: true })
+          : link('Delete', () => { mn.armDel = true; render(); setTimeout(() => { mn.armDel = false; if (mn.open) render(); }, 4000); }, { k: 'mnote_del', danger: true })),
+    ];
+  }
+  function onNotes(m) {
+    if (m.kind === 'mnotes') { mn.list = m.list ?? []; if (tab === 'meetings' && !mn.open) render(); return true; }
+    if (m.kind === 'mnote' && mn.open?.name === m.name) { mn.open.text = m.text ?? ''; mn.open.dirty = false; if (mn.ta) mn.ta.value = mn.open.text; render(); return true; }
+    if (m.kind === 'mnote_done') {
+      const was = mn.busy; mn.busy = '';
+      if (mn.open && m.name === mn.open.name) {
+        if (m.text != null) { mn.open.text = m.text; if (mn.ta) mn.ta.value = m.text; mn.open.dirty = was === 'improve'; }
+        if (was === 'save' && m.ok) mn.open.dirty = false;
+        if (m.title) mn.open.title = m.title;
+      }
+      if (m.msg) note(m.msg, !m.ok);
+      render();
+      return true;
+    }
+    return false;
+  }
   function recentList() {
     const { box, nav } = paged('recent', state.recent, (r) => el('li', { className: `item ${r.kind}` },
       el('span', { className: 'mark', 'aria-hidden': 'true' }),
@@ -689,11 +809,25 @@
         toggle('Its models can see images', 'Most servers don\'t say, so tell me.', a.images, () => { a.images = !a.images; render(`img:${ADD}`); }, `img:${ADD}`)) : null);
   }
   function appearancePage() {
-    const tabs = [['look', 'Look'], ['size', 'Size']], t = pageTab('appearance', tabs);
+    const tabs = [['look', 'Look'], ['colour', 'Colour'], ['size', 'Size']], t = pageTab('appearance', tabs);
     const head = el('div', { className: 'mhead' }, tabRow('Appearance', 'look-panel', tabs, t, (id) => { ui.tabs.appearance = id; }));
     return [head, tabPanel('look-panel', t, t === 'look'
       ? group(null, 'Each look has its own name and voice.', null, lookTiles())
+      : t === 'colour' ? group(null, 'My colours, everywhere: me, this panel, my cards and the listening pill.', null, themeTiles())
       : group(null, 'How big I am on your screen.', null, picks('Size', state.sizes, state.size, (x) => act(`size:${x}`), 'size', SIZE_TIPS)))];
+  }
+  // The colour themes as swatches; picking one recolours everything at once.
+  function themeTiles() {
+    const list = Object.entries(window.RoamieTheme?.THEMES ?? {});
+    return el('div', { className: 'themes', role: 'radiogroup', 'aria-label': 'Colour' }, list.map(([id, t]) => {
+      const on = (state.theme ?? window.RoamieTheme?.BASE) === id;
+      const b = el('button', { className: 'px themetile', type: 'button', role: 'radio', 'data-k': `theme:${id}`, tabIndex: on ? 0 : -1 },
+        el('span', { className: 'sw', 'aria-hidden': 'true', style: `background: linear-gradient(135deg, ${t.swatch[0]} 0 50%, ${t.swatch[1]} 50% 100%)`, 'data-raw': '1' }),
+        el('span', { className: 'name', textContent: t.label }));
+      b.setAttribute('aria-checked', String(on));
+      b.addEventListener('click', () => { if (!on) { window.RoamieTheme?.set(id); state.theme = id; act(`theme:${id}`); render(`theme:${id}`); } });
+      return b;
+    }));
   }
   // The looks as live tiles: each one's character, playing, at the size picked below. Kept between renders (a state update mustn't restart
   // them); hovering or focusing one makes it wave; picking it makes it cheer.
@@ -983,13 +1117,13 @@
   }
 
   // ---------------------------------------------------------------- render
-  const PANES = { home, memory, model: modelPage, appearance: appearancePage, speaking: speakingPage, listening: listeningPage, shortcuts: shortcutsPage, routines: routinesPage, general: generalPage, about: aboutPage, whatsnew: whatsNewPage };
+  const PANES = { home, memory, meetings: meetingsPage, model: modelPage, appearance: appearancePage, speaking: speakingPage, listening: listeningPage, shortcuts: shortcutsPage, routines: routinesPage, general: generalPage, about: aboutPage, whatsnew: whatsNewPage };
   // focusKey: what to focus after (a data-k, or an element id); otherwise whatever had focus keeps it.
   function render(focusKey, animate = false) {
     if (!state) return;
     const active = document.activeElement;
     // Never rebuild under someone typing a key: catch up when they leave the field.
-    if (!focusKey && !animate && active?.tagName === 'INPUT' && active.closest('.pane')) { deferred = true; return; }
+    if (!focusKey && !animate && (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') && active.closest('.pane')) { deferred = true; return; }
     deferred = false;
     const keep = focusKey ?? active?.dataset?.k ?? (active?.id?.startsWith('key-') ? active.id : null);
     hideTip();
@@ -1136,10 +1270,12 @@
   window.__panel = (m) => {
     if (m.kind === 'state') {
       const first = !state; state = m.state;
+      if (state.theme) window.RoamieTheme?.set(state.theme);
       if (ui.arm && !document.querySelector(`[data-k="${CSS.escape(ui.arm)}"]`)) ui.arm = null;
       render(null, first);
       if (m.state.tab) show(m.state.tab, true); // opened for a reason (asked with nothing signed in: the Model page)
     }
+    else if (onNotes(m)) { /* meeting notes */ }
     else if (m.kind === 'note') note(m.text, m.bad, m.copy);
     else if (m.kind === 'copied' && m.which === 'problem') note(m.ok ? 'Copied the error details. Paste them into your report.' : "Couldn't copy the error details. Try Save diagnostics.", !m.ok);
     else if (m.kind === 'copied') {
@@ -1252,6 +1388,11 @@
       if (cmd !== 'sidecar_send') return null;
       console.log('[preview] would send', JSON.stringify(args.msg));
       // A look change comes back as new state, as from the sidecar, so the Roamie's reaction can be seen.
+      if (args.msg?.type === 'mnotes_list') setTimeout(() => window.__panel({ kind: 'mnotes', list: [
+        { name: 'a.md', title: 'Weekly project meeting: science fair poster', when: at - 2 * 36e5, mins: 1, words: 62 },
+        { name: 'b.md', title: 'Biology lecture: photosynthesis', when: at - 26 * 36e5, mins: 48, words: 6210 },
+        { name: 'c.md', title: 'Study group: chemistry test prep', when: at - 3 * 864e5, mins: 35, words: 4120 }] }), 80);
+      if (args.msg?.type === 'mnotes_read') setTimeout(() => window.__panel({ kind: 'mnote', name: args.msg.name, text: '# 📝 Weekly project meeting: science fair poster\n\n> 📅 Fri, Nov 20, 2026 · 🕒 11:55 AM–11:56 AM (1 min) · 🗣️ 62 words · 🎙️ Notes by Jarome\n\n## ✨ Summary\n\nThe team covered the science fair poster, the printing budget and a deadline extension. Priya will finish the poster by Friday; printing is capped at $50.\n\n## 📌 Action items\n\n- [ ] Finish the science fair poster design · 👤 Priya · 📆 Friday\n- [ ] Email the teacher about the deadline extension · 👤 Sam · 📆 Tomorrow morning\n' }), 120);
       if (args.msg?.type === 'copy_problem') setTimeout(() => window.__panel({ kind: 'copied', which: 'problem', ok: q.get('copy') !== 'fail' }), 150);
       const id = args.msg?.id ?? '';
       if (id.startsWith('size:')) { s.size = id.slice(5); setTimeout(() => window.__panel({ kind: 'state', state: s }), 120); }

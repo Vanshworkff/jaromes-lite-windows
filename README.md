@@ -26,6 +26,8 @@
 
 ## 📸 Take a look
 
+<p align="center"><img src="docs/art/tour.gif" alt="A tour of the real Jaromes Lite panel: Home with a meeting recording, the Meeting notes page, a note opened as a page and in the editor, and Appearance with the Colour tab" width="100%"></p>
+
 <p align="center">
   <img src="docs/screenshots/win-home.png" alt="The Jaromes Lite panel opening above the Windows system tray" width="100%">
 </p>
@@ -65,6 +67,32 @@ You don't need to be "good with computers". If you can talk, you can use it. �
 
 ---
 
+## 🎨 Make it yours
+
+<p align="center"><img src="docs/art/themes.gif" alt="The buddies switching live through nine colour themes: pink and purple, teal, ocean blue, violet, matrix green, sunset orange, iron red, gold and mono" width="100%"></p>
+
+Pick your colours in **Settings → Appearance → Colour**, or right in the setup guide. **Nine themes**: pink & purple, teal, ocean blue, violet, matrix green, sunset orange, iron red, gold and mono. Everything changes at once (your buddy, the panel, the cards on screen and the little listening pill), instantly, no restart.
+
+## 🎭 Nine buddies, nine personalities
+
+<p align="center"><img src="docs/art/cast.gif" alt="Each character introduces itself in its own style: Jarome the study hype-man, JARVIS the calm butler, Rita X the sassy secretary, GlayOS the deadpan lab AI, Anime Girl the cheerleader, Adrian the no-fluff mate, Sarah the kind friend, Ultren grand and sardonic, and Roamie the cheeky creature" width="100%"></p>
+
+Every look is a different person: how they talk, cheer you on and nudge you is all their own. Same help, different vibe. Switch any time in **Settings → Appearance**.
+
+| | Look | Personality |
+|:---:|---|---|
+| 🧑‍🎓 | **Jarome** | Study hype-man. Speed rounds, memory tricks, boss levels. |
+| 🎩 | **JARVIS** | Calm British butler. Reports like a briefing. |
+| 📋 | **Rita X** | Sassy secretary. Talks in agendas and deadlines. |
+| 🧪 | **GlayOS** | Deadpan lab AI. Every task is a test. |
+| 🌸 | **Anime Girl** | Bubbly cheerleader. Every session is a training arc. |
+| 🧢 | **Adrian** | No-fluff mate. Two things, then you're done. |
+| 🤗 | **Sarah** | Kind best friend. Low pressure, real advice. |
+| 🤖 | **Ultren** | Grand and sardonic. Deadlines are destiny. |
+| 👾 | **Roamie** | Cheeky little creature. Tiny jokes, big cheers. |
+
+---
+
 ## ✨ What it can do
 
 | | | |
@@ -76,7 +104,8 @@ You don't need to be "good with computers". If you can talk, you can use it. �
 | 📚 | **Flashcards** | *"Make flashcards from my biology PDF"*. It reads your notes and saves the cards in decks. |
 | 🧠 | **Smart quizzes** | *"Quiz me on bio"*. Cards you get right come back later; ones you miss come back soon (spaced repetition). |
 | 📄 | **Reads your PDFs** | Lecture slides, worksheets, textbook chapters: it explains, sums up or turns them into cards. |
-| 📝 | **Meeting notes** | *"Take meeting notes"*. It listens to the whole meeting or lecture, then writes a Notion-style page: summary, decisions, action items with owners, and the full transcript. |
+| 🎨 | **Your colours** | Nine colour themes; everything recolours at once. |
+| 📝 | **Meeting notes** | *"Take meeting notes"*. It listens to the whole meeting or lecture, then writes a Notion-style page: summary, decisions, action items with owners, and the full transcript. Read and **edit notes right in the app**, tick off action items, ✨ improve them, or turn them into 📚 flashcards and ⏰ reminders. |
 | 🎯 | **Focus timer** | *"Help me focus for 30 minutes"*. It gently teases you back if you wander off to YouTube. |
 | 🌙 | **Evening summary** | After 6 pm it tells you what you got done, how long you studied, your streak, and what's due tomorrow. |
 | 🖱️ | **Works your apps** | Fills in forms, clicks buttons, opens apps and files, and runs commands, always **asking first** before changing anything. |
@@ -206,11 +235,14 @@ Every small step counts. Five minutes of flashcards today beats a three-hour cra
   "Take meeting notes" 🎙️  ──▶  ( ◕‿◕ ) listening…  ──▶  "Stop the meeting notes"  ──▶  📄 your notes open
 ```
 
+<p align="center"><img src="docs/art/meeting.gif" alt="Jarome listens while a live transcript fills in, then a notes page appears with a summary, action items and decisions" width="100%"></p>
+
 <p align="center"><img src="docs/screenshots/meeting-notes.png" alt="A Jaromes Lite meeting notes page: title, summary, key points, decisions, action items with owners and due dates, discussion topics, open questions and the transcript" width="100%"></p>
 
 1. Say **"take meeting notes"** (or press **Start** under *Meeting notes* on the panel's Home page).
 2. Have your meeting, class or call. Jaromes Lite keeps listening and writing everything down, on your computer.
-3. Say or type **"stop the meeting notes"** (or press **Stop**). A minute later your notes open: **summary, key points, decisions, action items with owners and dates, topics, open questions** and the **full transcript** with timestamps.
+3. Say or type **"stop the meeting notes"** (or press **Stop**). Seconds later your notes open: **summary, key points, decisions, action items with owners and dates, topics, open questions** and the **full transcript** with timestamps.
+4. Open **Meeting notes** in the panel (right under Memory) to read every note like a page, tick off action items, press **✏️ Edit** to change anything, **✨ Improve** to tidy it up, **📚 Flashcards** to study it, or **⏰ Reminders** to add its action items to your list.
 
 Notes are saved as Markdown pages in **Documents → Meeting Notes**, so they open anywhere and import straight into **Notion** (*Import → Markdown*). 🙋 If other people are in the meeting, let them know you're taking notes.
 

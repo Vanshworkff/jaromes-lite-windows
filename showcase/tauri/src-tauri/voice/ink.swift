@@ -8,8 +8,10 @@
 import AppKit
 import QuartzCore
 
-private let accent = CGColor(srgbRed: 0x78 / 255, green: 1, blue: 0xe2 / 255, alpha: 1)
-private let rim = CGColor(srgbRed: 0x03 / 255, green: 0x27 / 255, blue: 0x22 / 255, alpha: 0.6)
+private var accent: CGColor { ThemeColors.accent }
+private let oldAccent = CGColor(srgbRed: 0x78 / 255, green: 1, blue: 0xe2 / 255, alpha: 1)
+private var rim: CGColor { ThemeColors.rim }
+private let oldRim = CGColor(srgbRed: 0x03 / 255, green: 0x27 / 255, blue: 0x22 / 255, alpha: 0.6)
 
 /// One pen stroke: points in its view's coordinates (top-left origin), drawn as a filled, tapered outline.
 final class InkStroke {

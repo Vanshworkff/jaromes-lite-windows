@@ -24,13 +24,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import {
-  addFact, applySynced, syncSnapshot, DIR as STORE_DIR, repeatLabel, startOfDay, applyFold, approxTokens, archiveFolded, clearFacts, clearFinished, compactTrigger, fitContext, flushWrites, forgetFact, isSummary, listItems, listFacts, nextDue, pickFacts, planFold,
+  addCommitment, parseDue, addFact, applySynced, syncSnapshot, DIR as STORE_DIR, repeatLabel, startOfDay, applyFold, approxTokens, archiveFolded, clearFacts, clearFinished, compactTrigger, fitContext, flushWrites, forgetFact, isSummary, listItems, listFacts, nextDue, pickFacts, planFold,
   touchFacts, forDisk, forProvider, loadLatestSession, newSession, openCommitments, pruneSessions, readJson, saveSession, takeDueReminders, updateCommitment, writeJson,
 } from './store.mjs';
 import { foldInput, foldPrompt, memoryInput, memoryPrompt, oneShot, parseBrain, transcript } from './brain.mjs';
 import { briefNote, briefDay } from './brief.mjs';
-import { NOTES_DIR, MIN_WORDS, latestNotes, notesInput, notesPrompt, parseNotes, readUnfinished, saveNotes, toMarkdown, wordCount } from './meeting.mjs';
-import { createStudyTools, eveningNote, parseQuizNote, logAndSave, dayStats, load as loadStudy, STUDY_ANIMS } from './study.mjs';
+import { THEME_BASE, nativeColors, themeIds } from './theme.mjs';
+import { stamp, NOTES_DIR, MIN_WORDS, latestNotes, notesInput, notesPrompt, parseNotes, readUnfinished, saveNotes, toMarkdown, wordCount } from './meeting.mjs';
+import { addCards, createStudyTools, eveningNote, parseQuizNote, logAndSave, dayStats, load as loadStudy, STUDY_ANIMS } from './study.mjs';
 import { CHECK_MS, DEFAULT_DISTRACTIONS, check as focusCheck, parseDistractions, startBlock } from './focus.mjs';
 import { saveCardImage } from './cardimage.mjs';
 import { cleanWakeName, wakeName } from './wakename.mjs';
@@ -1650,6 +1651,16 @@ function openUrl(url) {
 
 // ---------- replies: text only, or voice and text ----------
 // A new look brings its voice: it greets you in it (its "One sec." beats are made again).
+// Colour theme (theme.mjs; the pages recolour themselves with roamies/theme.js).
+const themeNow = () => (themeIds.includes(config.theme) ? config.theme : THEME_BASE);
+function setTheme(t) {
+  if (!themeIds.includes(t)) return;
+  config.theme = t; saveConfig();
+  ui({ kind: 'theme', theme: t });
+  send({ type: 'voice_theme', ...nativeColors(t) });
+  if (onboarding) ob({ kind: 'theme', theme: t });
+  panel();
+}
 function setLook(l) {
   if (!LOOKS.some(([id]) => id === l)) return;
   const changed = l !== config.look;
@@ -1957,7 +1968,7 @@ async function writeMeetingNotes(m) {
     const title = notes?.title || m.title || 'Meeting';
     const file = await saveNotes(toMarkdown({ notes, segments: m.segments, startedAt: m.startedAt, endedAt: m.endedAt, by: lookName(), title }), { startedAt: m.startedAt, title });
     meetingLastFile = file;
-    openPath(file);
+    if (panelOpen) { toPanel({ kind: 'mnotes', list: await notesList() }); openPanel('meetings'); } else openPath(file);
     say(notes ? `Your notes for "${title}" are ready: ${notes.action_items.length ? `${notes.action_items.length} action item${notes.action_items.length === 1 ? '' : 's'}, ` : ''}summary and full transcript.` : 'I saved the transcript, but couldn\'t write the summary this time. Say "redo my meeting notes" to try again.', notes ? 'happy' : 'concerned');
   } finally { meetingWriting = false; menu(); }
 }
@@ -2010,6 +2021,74 @@ tools.push(
     execute: async () => redoMeetingNotes(),
   },
 );
+// ---------- meeting notes page (panel) ----------
+const noteFile = (name) => { const b = path.basename(String(name ?? '')); return b.endsWith('.md') && !b.startsWith('.') ? path.join(NOTES_DIR, b) : null; };
+const noteTitle = (text, name) => (String(text).match(/^#\s*(?:📝\s*)?(.+)$/m)?.[1] ?? name.replace(/\.md$/, '')).trim();
+const splitTranscript = (text) => { const i = text.indexOf('\n## 📜 Transcript'); const j = i >= 0 ? text.lastIndexOf('\n---', i) : -1; const at = j >= 0 && i - j < 10 ? j : i; return at >= 0 ? [text.slice(0, at), text.slice(at)] : [text, '']; };
+async function notesList() {
+  let files = [];
+  try { files = (await fs.readdir(NOTES_DIR)).filter((f) => f.endsWith('.md') && !f.startsWith('.')); } catch {}
+  const list = await Promise.all(files.map(async (name) => {
+    const file = path.join(NOTES_DIR, name);
+    const [st, head] = await Promise.all([fs.stat(file), fs.readFile(file, 'utf8').then((t) => t.slice(0, 1500)).catch(() => '')]);
+    return { name, title: noteTitle(head, name), when: st.mtimeMs, mins: Number(head.match(/\((\d+) min\)/)?.[1] ?? 0), words: Number(head.match(/(\d+) words/)?.[1] ?? 0) };
+  }));
+  return list.sort((a, b) => b.when - a.when);
+}
+const toPanel = (msg) => panelOpen && send({ type: 'panel', msg });
+async function onNotesMsg(m) {
+  if (m.type === 'mnotes_list') return toPanel({ kind: 'mnotes', list: await notesList() });
+  const file = noteFile(m.name);
+  if (!file) return;
+  const done = (o) => toPanel({ kind: 'mnote_done', name: m.name, ...o });
+  if (m.type === 'mnotes_read') return toPanel({ kind: 'mnote', name: m.name, text: await fs.readFile(file, 'utf8').catch(() => '') });
+  if (m.type === 'mnotes_save') {
+    const text = String(m.text ?? '').slice(0, 2_000_000);
+    await fs.writeFile(file, text, 'utf8');
+    done({ ok: true, title: noteTitle(text, m.name), msg: 'Saved.' });
+    return toPanel({ kind: 'mnotes', list: await notesList() });
+  }
+  if (m.type !== 'mnotes_act') return;
+  const text = String(m.text ?? await fs.readFile(file, 'utf8').catch(() => ''));
+  const [notes, transcriptPart] = splitTranscript(text);
+  try {
+    if (m.action === 'open') { openPath(file); return; }
+    if (m.action === 'delete') {
+      const bin = path.join(NOTES_DIR, '.trash'); await fs.mkdir(bin, { recursive: true });
+      await fs.rename(file, path.join(bin, `${Date.now()}-${path.basename(file)}`));
+      toPanel({ kind: 'note', text: 'Deleted (kept in Meeting Notes/.trash, in case).' });
+      return toPanel({ kind: 'mnotes', list: await notesList() });
+    }
+    if (m.action === 'improve') {
+      const { text: out } = await oneShot({ ...(await sideRoute()), system: `You improve meeting notes written in Markdown for ${userName}. Keep the same structure (title line, the details line under it, the sections and their emoji headings, "- [ ]" action items). Make it clearer and sharper: fix speech-recognition mistakes you can tell from context, tighten wording, merge repeats, make action items specific (who, what, when if said), and add a short "## 💡 Next steps" section if it helps. Never invent facts, names, numbers or decisions. Reply with only the improved Markdown, no commentary, no code fences.`, text: notes });
+      const better = out.replace(/^```(?:markdown|md)?\n?|\n?```\s*$/g, '').trim();
+      if (!better.startsWith('#')) throw new Error('the improved notes came back in the wrong shape');
+      return done({ ok: true, text: `${better}\n${transcriptPart}`, msg: 'Improved. Check it, then Save.' });
+    }
+    if (m.action === 'cards') {
+      const { text: out } = await oneShot({ ...(await sideRoute()), system: 'You make study flashcards from notes. Reply with only JSON: {"cards": [{"q": "...", "a": "..."}]}. 6 to 20 cards, one fact each, short questions and answers, only facts that are in the notes.', text: notes });
+      const cards = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] ?? '{}').cards ?? [];
+      if (!cards.length) throw new Error('no cards came back');
+      const { deck, added } = await addCards(noteTitle(text, m.name).slice(0, 60), cards, 'Meeting notes');
+      return done({ ok: true, msg: `Made ${added} flashcards in "${deck.name}". Say "quiz me on ${deck.name}" to practise.` });
+    }
+    if (m.action === 'reminders') {
+      const items = [...notes.matchAll(/^- \[ \] (.+)$/gm)].map((x) => x[1]);
+      if (!items.length) return done({ ok: true, msg: 'No open action items in these notes.' });
+      for (const it of items) {
+        const [task, ...rest] = it.split(' · ');
+        const due = rest.find((r) => r.startsWith('📆'))?.replace('📆', '').trim();
+        const who = rest.find((r) => r.startsWith('👤'))?.replace('👤', '').trim();
+        await addCommitment(`${task.trim()}${who ? ` (${who})` : ''}`, due ? parseDue(due) : null);
+      }
+      menu(); scheduleReminders(); syncSoon();
+      return done({ ok: true, msg: `Added ${items.length} reminder${items.length === 1 ? '' : 's'} from the action items.` });
+    }
+  } catch (e) {
+    console.error('[notes]', m.action, e?.message ?? e);
+    return done({ ok: false, msg: `Couldn't do that: ${String(e?.message ?? e).slice(0, 120)}` });
+  }
+}
 // ---------- memory sync (sync.mjs) ----------
 // With a sync folder set: a pass every minute, and a few seconds after a change here. A pass merges the other
 // computers' files into memory (only if nothing changed here meanwhile) and writes this computer's file.
@@ -2201,7 +2280,7 @@ function panelState() {
   const current = getModel(config.model);
   const doing = activity.doing();
   return {
-    version: VERSION, whatsNewFrom: config.whatsNewFrom ?? null, os: MAC ? 'mac' : process.platform === 'win32' ? 'win' : LINUX ? 'linux' : 'other', snap: SNAP_OK,
+    version: VERSION, theme: themeNow(), whatsNewFrom: config.whatsNewFrom ?? null, os: MAC ? 'mac' : process.platform === 'win32' ? 'win' : LINUX ? 'linux' : 'other', snap: SNAP_OK,
     // Wayland: shortcuts are commands bound in the desktop's settings (bind), and there's no Cursor size.
     wayland: WAYLAND, bind: HOTKEYS_OK ? null : BIND,
     status: busy ? { state: 'busy', text: doing ?? 'Thinking' } : loggingIn ? { state: 'busy', text: loginStatus || `Signing in to ${PROVIDER_LABELS[loggingIn]}` } : current ? { state: 'ready', text: 'Ready' } : { state: 'off', text: 'Not signed in' },
@@ -2255,7 +2334,7 @@ function panelState() {
       mics: mics.list, mic: config.mic ?? '', micAuto: mics.list.find((x) => x.id === mics.auto)?.name ?? '',
       download: NEEDS_MODEL && config.voice && !voiceReady() ? { status: voiceModel.status, pct: voiceModel.total ? Math.floor((voiceModel.done / voiceModel.total) * 100) : 0, size: sizeLabel() } : null,
     } : null,
-    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, runnableSpec, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: MAC && notchScreen ? notchMode() : null, meeting: VOICE_OK ? { on: !!meeting, since: meeting?.startedAt ?? null, words: meeting ? wordCount(meeting.segments) : 0, writing: meetingWriting, title: meeting?.title ?? '' } : null, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK, evening: config.eveningSummary !== false }, study: studyPanel(), focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, gameMode: HANDS_OK ? config.gameSidebar !== false : null,
+    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, runnableSpec, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: MAC && notchScreen ? notchMode() : null, meeting: VOICE_OK ? { on: !!meeting, since: meeting?.startedAt ?? null, words: meeting ? wordCount(meeting.segments) : 0, writing: meetingWriting, title: meeting?.title ?? '', live: meeting ? meeting.segments.slice(-3).map((s) => ({ at: stamp(s.t), text: s.text.slice(-280) })) : [] } : null, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK, evening: config.eveningSummary !== false }, study: studyPanel(), focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, gameMode: HANDS_OK ? config.gameSidebar !== false : null,
     login: login.supported ? { on: login.on } : null,
     update: { available: update.available, installing: update.installing, checking: update.checking, result: update.result, page: update.page, done: update.done },
     intro: !!intro,
@@ -2326,7 +2405,7 @@ function onVoice(m) {
     onSpoken(m.text.trim(), m.area);
   }
   else if (m.type === 'voice_state' && m.state === 'idle' && snap?.waitingVoice) snap.waitingVoice = false;
-  else if (m.type === 'voice_ready') micPick();
+  else if (m.type === 'voice_ready') { micPick(); send({ type: 'voice_theme', ...nativeColors(themeNow()) }); }
   else if (m.type === 'voice_mics') { mics = cleanMics(m); panel(); }
   else if (m.type === 'voice_lang') { langInfo = { id: String(m.id ?? ''), engine: String(m.engine ?? ''), online: !!m.online }; logLine('speech_lang', langInfo); panel(); }
   else if (m.type === 'voice_error') {
@@ -2490,6 +2569,7 @@ async function onMenu(id, via) {
   else if (id.startsWith('local:remove:')) removeServer(id.slice(13));
   else if (id.startsWith('size:') && SIZES.some(([s]) => s === id.slice(5))) { config.size = id.slice(5); saveConfig(); ui({ kind: 'size', size: config.size }); menu(); }
   else if (id.startsWith('look:')) setLook(id.slice(5));
+  else if (id.startsWith('theme:')) setTheme(id.slice(6));
   else if (id === 'replies:text') setReplies('text');
   else if (id === 'replies:voice') setReplies('voice');
   else if (id.startsWith('fishmodel:') && FISH_CHOICES.some((c) => c.id === id.slice(10))) {
@@ -2707,7 +2787,7 @@ function obState() {
     platform: process.platform,
     // What this computer can do (platform.mjs): Ask About an Area, circling while talking, and on Wayland no
     // global shortcuts (bind: the commands to bind in the desktop's settings instead) and no Cursor size.
-    snap: SNAP_OK, circle: CIRCLE_OK, session: SESSION, bind: HOTKEYS_OK ? null : BIND, sizes: SIZES,
+    snap: SNAP_OK, circle: CIRCLE_OK, session: SESSION, bind: HOTKEYS_OK ? null : BIND, sizes: SIZES, theme: themeNow(),
     step: config.onboardStep ?? 0,
     oauth: signInCards(Object.keys(OAUTH), (id) => oauthOn.get(id), PROVIDER_LABELS),
     apikey: keyCards(AUTH_PROVIDERS, (id) => keyOn.get(id)),
@@ -2780,6 +2860,7 @@ async function onGuide(m) {
   else if (m.type === 'ob_wake' && MAC) { config.wakeWord = !!m.on; saveConfig(); agentStale = true; voiceConfig(); menu(); obState(); }
   else if (m.type === 'ob_voice_model') getVoiceModel();
   else if (m.type === 'ob_look') setLook(m.look);
+  else if (m.type === 'ob_theme') setTheme(m.theme);
   else if (m.type === 'ob_size' && SIZES.some(([s]) => s === m.size)) { config.size = m.size; saveConfig(); ui({ kind: 'size', size: config.size }); menu(); }
   else if (m.type === 'set_keys') {
     const error = applyKeys(m);
@@ -2818,6 +2899,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     notchUi();
     ui({ kind: 'size', size: sizeNow() });
     ui({ kind: 'look', look: config.look ?? 'classic' });
+    ui({ kind: 'theme', theme: themeNow() });
     if (config.onboarded) ui({ kind: 'greet' });
     agents.sync();
   } else if (m.type?.startsWith('ob_') || m.type?.startsWith('chat_') || m.type === 'set_keys' || m.type === 'set_actions' || m.type === 'set_login' || m.type === 'keybind_error') onGuide(m).catch((e) => console.error('guide', e));
@@ -2834,6 +2916,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   else if (m.type === 'reply_said') { if (!busy) { holdWake(false); saidPending = false; clearTimeout(saidCap); stir(); } }
   else if (m.type === 'listen_cancel') { autoTurn = null; send({ type: 'listen_cancel' }); } // Esc while the mic is on
   // A link clicked on the research card: web and mail links only.
+  else if (m.type?.startsWith('mnotes_')) onNotesMsg(m).catch((e) => console.error('notes', e));
   else if (m.type === 'open_link') { const v = checkLink(m.url); if (v.level === SAFE) openUrl(String(m.url)); else console.error('open_link blocked:', v.reason); }
   else if (m.type === 'list_toggle') toggleItem(String(m.id)).catch((e) => console.error('list', e));
   else if (m.type === 'show_list') showList({ seconds: 20, toggle: true });
